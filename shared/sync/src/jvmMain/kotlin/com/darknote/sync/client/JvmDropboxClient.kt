@@ -5,13 +5,13 @@ import com.dropbox.core.DbxAuthFinish
 import com.dropbox.core.DbxPKCEWebAuth
 import com.dropbox.core.DbxRequestConfig
 import com.dropbox.core.DbxWebAuth
+import com.dropbox.core.oauth.DbxCredential
 import com.dropbox.core.v2.DbxClientV2
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.util.Properties
 
 /**
  * JVM/Desktop implementation of DropboxClient using official SDK.
@@ -56,7 +56,12 @@ class JvmDropboxClient(
     override suspend fun finishAuth(code: String): Result<Unit> {
         return try {
             val authFinish: DbxAuthFinish = pkceWebAuth!!.finishFromCode(code)
-            saveTokens(authFinish.accessToken, authFinish.refreshToken)
+            // Save credential with auto-refresh support
+            saveTokens(
+                authFinish.accessToken, 
+                authFinish.refreshToken,
+                authFinish.expiresAt ?: (System.currentTimeMillis() + 14399 * 1000L) // 4h default
+            )
             loadClient()
             Result.success(Unit)
         } catch (e: Exception) {
@@ -166,28 +171,27 @@ class JvmDropboxClient(
         }
     }
 
-    private fun saveTokens(accessToken: String, refreshToken: String?) {
-        val props = Properties()
-        props.setProperty("access_token", accessToken)
-        if (refreshToken != null) {
-            props.setProperty("refresh_token", refreshToken)
+    private fun saveTokens(accessToken: String, refreshToken: String?, expiresAt: Long) {
+        try {
+            val credential = DbxCredential(
+                accessToken,
+                expiresAt,
+                refreshToken,
+                appKey
+            )
+            credentialsPath.writeText(credential.toString())
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
-        props.store(credentialsPath.outputStream(), "DarkNote Dropbox Credentials")
     }
 
     private fun loadClient() {
         if (!credentialsPath.exists()) return
 
         try {
-            val props = Properties()
-            props.load(credentialsPath.inputStream())
-            val accessToken = props.getProperty("access_token")
-
-            client = if (accessToken != null) {
-                DbxClientV2(config, accessToken)
-            } else {
-                null
-            }
+            val credential = DbxCredential.Reader.readFully(credentialsPath.readText())
+            // Client auto-refreshes token when it expires
+            client = DbxClientV2(config, credential)
         } catch (e: Exception) {
             e.printStackTrace()
             client = null

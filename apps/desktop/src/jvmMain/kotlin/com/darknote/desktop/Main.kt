@@ -24,10 +24,13 @@ import com.darknote.desktop.ui.tree.*
 import com.darknote.desktop.ui.dialogs.RenameDialog
 import com.darknote.desktop.ui.screens.SettingsScreen
 import com.darknote.desktop.viewmodel.SnippetTreeViewModel
+import com.darknote.desktop.viewmodel.AuthState
 import com.darknote.desktop.viewmodel.AuthViewModel
 import com.darknote.sync.client.DropboxClientFactory
 import com.darknote.sync.engine.SyncEngine
 import com.darknote.sync.engine.SyncState
+import com.darknote.sync.watcher.FileWatcher
+import com.darknote.sync.watcher.WatcherSync
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -99,6 +102,41 @@ fun MainScreen() {
     // Auth ViewModel
     val authViewModel = remember {
         AuthViewModel(dropboxClient)
+    }
+    
+    // File watcher for auto-sync
+    val watcherSync = remember {
+        WatcherSync(
+            syncEngine = syncEngine,
+            scope = scope,
+            snippetsDir = File(System.getProperty("user.home"), ".config/darknote/snippets")
+        )
+    }
+    val isFileWatching by watcherSync.isWatching.collectAsState()
+    
+    // Start/stop file watcher based on auth state
+    val authState by authViewModel.authState
+    LaunchedEffect(authState) {
+        when (authState) {
+            is AuthState.Authenticated -> {
+                if (!watcherSync.isRunning) {
+                    watcherSync.start()
+                }
+            }
+            is AuthState.NotAuthenticated, is AuthState.Offline -> {
+                // Keep watching for local changes even when not authenticated
+                // so we can queue syncs for later
+            }
+            else -> {}
+        }
+    }
+    
+    // Start file watcher on app startup & stop on dispose
+    DisposableEffect(Unit) {
+        watcherSync.start()
+        onDispose {
+            watcherSync.stop()
+        }
     }
     
     // Sync state
@@ -325,13 +363,35 @@ fun MainScreen() {
                     
                     Spacer(modifier = Modifier.width(8.dp))
                     
+                    // File watcher indicator
+                    if (isFileWatching) {
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = "Watching for changes",
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.width(4.dp))
+                    
                     // Sync status indicator
                     when (syncState) {
                         is SyncState.Syncing -> {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Text(
+                                    "Syncing",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                         is SyncState.Error -> {
                             Icon(
