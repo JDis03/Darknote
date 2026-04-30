@@ -1,29 +1,33 @@
 plugins {
-    kotlin("jvm")
+    kotlin("multiplatform")
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.0"
     kotlin("plugin.serialization")
 }
 
-repositories {
-    google()
-    mavenCentral()
-    maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
-}
+kotlin {
+    jvm()
 
-dependencies {
-    implementation(project(":shared:core"))
-    implementation(project(":shared:persistence"))
-    implementation(project(":shared:sync"))
+    sourceSets {
+        val jvmMain by getting {
+            dependencies {
+                implementation(project(":shared:core"))
+                implementation(project(":shared:persistence"))
+                implementation(project(":shared:sync"))
 
-    // Compose Desktop
-    implementation(compose.desktop.currentOs)
+                // Compose Desktop
+                implementation(compose.desktop.currentOs)
+                implementation(compose.material3)
+                implementation(compose.materialIconsExtended)
 
-    // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.8.1")
+                // Coroutines
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.8.1")
 
-    // Serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.0")
+                // Serialization
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.0")
+            }
+        }
+    }
 }
 
 compose.desktop {

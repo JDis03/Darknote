@@ -71,12 +71,23 @@ class AuthViewModel(
     }
 
     /**
+     * Skip authentication and continue in offline mode.
+     */
+    fun skipAuth() {
+        _authState.value = AuthState.Offline
+    }
+
+    /**
      * Logout and clear tokens.
      */
     fun logout() {
         // TODO: Implement token clearing
         _authState.value = AuthState.NotAuthenticated
     }
+
+    /**
+     * Authentication states.
+     */
 }
 
 sealed class AuthState {
@@ -84,5 +95,6 @@ sealed class AuthState {
     object NotAuthenticated : AuthState()
     object Authorizing : AuthState()
     object Authenticated : AuthState()
+    object Offline : AuthState()  // Continue without Dropbox
     data class Error(val message: String) : AuthState()
 }

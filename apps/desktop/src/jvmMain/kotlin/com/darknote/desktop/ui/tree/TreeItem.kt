@@ -1,5 +1,6 @@
 package com.darknote.desktop.ui.tree
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -41,103 +42,159 @@ fun TreeItemView(
     onToggleExpand: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val backgroundColor = if (item.isSelected)
+        MaterialTheme.colorScheme.primaryContainer
+    else
+        MaterialTheme.colorScheme.surface
+
     val contentColor = if (item.isSelected)
         MaterialTheme.colorScheme.onPrimaryContainer
     else
         MaterialTheme.colorScheme.onSurface
 
+    when (item) {
+        is TreeItem.FolderItem -> {
+            FolderItemView(
+                folder = item,
+                backgroundColor = backgroundColor,
+                contentColor = contentColor,
+                onClick = onClick,
+                onToggleExpand = onToggleExpand,
+                modifier = modifier
+            )
+        }
+        is TreeItem.SnippetItem -> {
+            SnippetItemView(
+                snippet = item,
+                backgroundColor = backgroundColor,
+                contentColor = contentColor,
+                onClick = onClick,
+                modifier = modifier
+            )
+        }
+    }
+}
+
+@Composable
+private fun FolderItemView(
+    folder: TreeItem.FolderItem,
+    backgroundColor: androidx.compose.ui.graphics.Color,
+    contentColor: androidx.compose.ui.graphics.Color,
+    onClick: () -> Unit,
+    onToggleExpand: () -> Unit,
+    modifier: Modifier
+) {
     Row(
         modifier = modifier
             .fillMaxWidth()
             .height(32.dp)
+            .background(backgroundColor)
             .clickable(onClick = onClick)
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        when (item) {
-            is TreeItem.FolderItem -> {
-                Icon(
-                    imageVector = if (item.isExpanded)
-                        Icons.Default.ExpandLess
-                    else
-                        Icons.Default.ExpandMore,
-                    contentDescription = if (item.isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clickable(onClick = onToggleExpand),
-                    tint = contentColor
-                )
+        // Expand/collapse icon with its own click handler
+        Icon(
+            imageVector = if (folder.isExpanded)
+                Icons.Default.ExpandLess
+            else
+                Icons.Default.ExpandMore,
+            contentDescription = if (folder.isExpanded) "Collapse" else "Expand",
+            modifier = Modifier
+                .size(20.dp)
+                .clickable(
+                    onClick = onToggleExpand,
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null
+                ),
+            tint = contentColor
+        )
 
-                Spacer(modifier = Modifier.width(2.dp))
+        Spacer(modifier = Modifier.width(2.dp))
 
-                Icon(
-                    imageVector = Icons.Default.Folder,
-                    contentDescription = "Folder",
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
+        Icon(
+            imageVector = Icons.Default.Folder,
+            contentDescription = "Folder",
+            modifier = Modifier.size(18.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
 
-                Spacer(modifier = Modifier.width(6.dp))
+        Spacer(modifier = Modifier.width(6.dp))
 
-                Text(
-                    text = item.name,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = contentColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
+        Text(
+            text = folder.name,
+            style = MaterialTheme.typography.bodySmall,
+            color = contentColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
 
-                if (item.childCount > 0) {
-                    Text(
-                        text = "${item.childCount}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 4.dp)
-                    )
-                }
-            }
+        if (folder.childCount > 0) {
+            Text(
+                text = "${folder.childCount}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+        }
+    }
+}
 
-            is TreeItem.SnippetItem -> {
-                Spacer(modifier = Modifier.width(24.dp))
+@Composable
+private fun SnippetItemView(
+    snippet: TreeItem.SnippetItem,
+    backgroundColor: androidx.compose.ui.graphics.Color,
+    contentColor: androidx.compose.ui.graphics.Color,
+    onClick: () -> Unit,
+    modifier: Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(32.dp)
+            .background(backgroundColor)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Spacer(modifier = Modifier.width(24.dp))
 
-                val icon = when (item.language) {
-                    "bash", "sh", "shell" -> Icons.Default.Terminal
-                    "python" -> Icons.Default.Code
-                    "kotlin" -> Icons.Default.Android
-                    else -> Icons.Default.Description
-                }
+        val icon = when (snippet.language) {
+            "bash", "sh", "shell" -> Icons.Default.Terminal
+            "python" -> Icons.Default.Code
+            "kotlin" -> Icons.Default.Android
+            else -> Icons.Default.Description
+        }
 
-                Icon(
-                    imageVector = icon,
-                    contentDescription = "Snippet",
-                    modifier = Modifier.size(16.dp),
-                    tint = if (item.isSelected)
-                        contentColor
-                    else
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        Icon(
+            imageVector = icon,
+            contentDescription = "Snippet",
+            modifier = Modifier.size(16.dp),
+            tint = if (snippet.isSelected)
+                contentColor
+            else
+                MaterialTheme.colorScheme.onSurfaceVariant
+        )
 
-                Spacer(modifier = Modifier.width(6.dp))
+        Spacer(modifier = Modifier.width(6.dp))
 
-                Text(
-                    text = item.name,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = contentColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
+        Text(
+            text = snippet.name,
+            style = MaterialTheme.typography.bodySmall,
+            color = contentColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
 
-                if (item.isFavorite) {
-                    Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = "Favorite",
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
+        if (snippet.isFavorite) {
+            Icon(
+                imageVector = Icons.Default.Star,
+                contentDescription = "Favorite",
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }

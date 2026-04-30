@@ -39,26 +39,37 @@ fun TreeView(
         TreeSearchBar(query = state.searchQuery, onQueryChange = {})
         Divider(color = MaterialTheme.colorScheme.outlineVariant)
 
-        val visibleItems = state.items.filter { it.isVisible }
-
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(vertical = 4.dp)
         ) {
-            items(visibleItems) { node ->
+            items(
+                items = state.items.filter { it.isVisible },
+                key = { node -> node.item.id }
+            ) { node ->
                 val item = node.item
+                val isSelected = item.id == state.selectedItemId
                 val paddingStart = (node.depth * 16).dp
 
                 Box(modifier = Modifier.padding(start = paddingStart)) {
                     when (item) {
                         is TreeItem.FolderItem -> TreeItemView(
-                            item = item.copy(isSelected = item.id == state.selectedItemId),
-                            onClick = { onItemClick(item) },
-                            onToggleExpand = { onItemToggle(item) }
+                            item = item.copy(isSelected = isSelected),
+                            onClick = { 
+                                println("Folder clicked: ${item.id}")
+                                onItemClick(item) 
+                            },
+                            onToggleExpand = { 
+                                println("Folder toggle: ${item.id}")
+                                onItemToggle(item) 
+                            }
                         )
                         is TreeItem.SnippetItem -> TreeItemView(
-                            item = item.copy(isSelected = item.id == state.selectedItemId),
-                            onClick = { onItemClick(item) }
+                            item = item.copy(isSelected = isSelected),
+                            onClick = { 
+                                println("Snippet clicked: ${item.id}")
+                                onItemClick(item) 
+                            }
                         )
                     }
                 }
