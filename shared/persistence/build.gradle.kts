@@ -18,6 +18,11 @@ kotlin {
             // Coroutines
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
         }
+        
+        jvmMain.dependencies {
+            // SQLDelight JDBC Driver for JVM
+            implementation("app.cash.sqldelight:sqlite-driver:2.0.2")
+        }
 
         commonTest.dependencies {
             implementation(kotlin("test"))

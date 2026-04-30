@@ -40,6 +40,8 @@ fun TreeItemView(
     item: TreeItem,
     onClick: () -> Unit,
     onToggleExpand: () -> Unit = {},
+    onRename: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val backgroundColor = if (item.isSelected)
@@ -60,6 +62,8 @@ fun TreeItemView(
                 contentColor = contentColor,
                 onClick = onClick,
                 onToggleExpand = onToggleExpand,
+                onRename = onRename,
+                onDelete = onDelete,
                 modifier = modifier
             )
         }
@@ -69,6 +73,8 @@ fun TreeItemView(
                 backgroundColor = backgroundColor,
                 contentColor = contentColor,
                 onClick = onClick,
+                onRename = onRename,
+                onDelete = onDelete,
                 modifier = modifier
             )
         }
@@ -82,17 +88,22 @@ private fun FolderItemView(
     contentColor: androidx.compose.ui.graphics.Color,
     onClick: () -> Unit,
     onToggleExpand: () -> Unit,
+    onRename: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
     modifier: Modifier
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(32.dp)
-            .background(backgroundColor)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    var showContextMenu by remember { mutableStateOf(false) }
+    
+    Box {
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(32.dp)
+                .background(backgroundColor)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
         // Expand/collapse icon with its own click handler
         Icon(
             imageVector = if (folder.isExpanded)
@@ -130,13 +141,39 @@ private fun FolderItemView(
             modifier = Modifier.weight(1f)
         )
 
-        if (folder.childCount > 0) {
-            Text(
-                text = "${folder.childCount}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 4.dp)
-            )
+            if (folder.childCount > 0) {
+                Text(
+                    text = "${folder.childCount}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+            }
+        }
+        
+        // Context menu
+        DropdownMenu(
+            expanded = showContextMenu,
+            onDismissRequest = { showContextMenu = false }
+        ) {
+            onRename?.let {
+                DropdownMenuItem(
+                    text = { Text("Rename") },
+                    onClick = {
+                        showContextMenu = false
+                        it()
+                    }
+                )
+            }
+            onDelete?.let {
+                DropdownMenuItem(
+                    text = { Text("Delete") },
+                    onClick = {
+                        showContextMenu = false
+                        it()
+                    }
+                )
+            }
         }
     }
 }
@@ -147,17 +184,22 @@ private fun SnippetItemView(
     backgroundColor: androidx.compose.ui.graphics.Color,
     contentColor: androidx.compose.ui.graphics.Color,
     onClick: () -> Unit,
+    onRename: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
     modifier: Modifier
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(32.dp)
-            .background(backgroundColor)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    var showContextMenu by remember { mutableStateOf(false) }
+    
+    Box {
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(32.dp)
+                .background(backgroundColor)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
         Spacer(modifier = Modifier.width(24.dp))
 
         val icon = when (snippet.language) {
@@ -188,13 +230,39 @@ private fun SnippetItemView(
             modifier = Modifier.weight(1f)
         )
 
-        if (snippet.isFavorite) {
-            Icon(
-                imageVector = Icons.Default.Star,
-                contentDescription = "Favorite",
-                modifier = Modifier.size(14.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
+            if (snippet.isFavorite) {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = "Favorite",
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        
+        // Context menu
+        DropdownMenu(
+            expanded = showContextMenu,
+            onDismissRequest = { showContextMenu = false }
+        ) {
+            onRename?.let {
+                DropdownMenuItem(
+                    text = { Text("Rename") },
+                    onClick = {
+                        showContextMenu = false
+                        it()
+                    }
+                )
+            }
+            onDelete?.let {
+                DropdownMenuItem(
+                    text = { Text("Delete") },
+                    onClick = {
+                        showContextMenu = false
+                        it()
+                    }
+                )
+            }
         }
     }
 }

@@ -70,21 +70,21 @@ class JvmDropboxClient(
         return try {
             withContext(Dispatchers.IO) {
                 val result = currentClient.files().listFolder(path)
-                val files = result.entries.map { entry ->
-                    val modifiedTime = when (entry) {
-                        is com.dropbox.core.v2.files.FileMetadata -> 
-                            entry.clientModified?.time ?: entry.serverModified?.time ?: 0L
-                        else -> 0L
-                    }
-                    RemoteFile(
-                        path = entry.pathLower ?: entry.name,
-                        name = entry.name,
-                        modifiedTime = modifiedTime,
-                        size = when (entry) {
-                            is com.dropbox.core.v2.files.FileMetadata -> entry.size
-                            else -> 0L
+                val files = result.entries.mapNotNull { entry ->
+                    when (entry) {
+                        is com.dropbox.core.v2.files.FileMetadata -> {
+                            val modifiedTime = entry.clientModified?.time 
+                                ?: entry.serverModified?.time 
+                                ?: System.currentTimeMillis()
+                            RemoteFile(
+                                path = entry.pathLower ?: entry.name,
+                                name = entry.name,
+                                modifiedTime = modifiedTime,
+                                size = entry.size
+                            )
                         }
-                    )
+                        else -> null // Skip folders
+                    }
                 }
                 Result.success(files)
             }
@@ -146,13 +146,14 @@ class JvmDropboxClient(
             withContext(Dispatchers.IO) {
                 val metadata = currentClient.files().getMetadata(remotePath)
                 if (metadata is com.dropbox.core.v2.files.FileMetadata) {
+                    val modifiedTime = metadata.clientModified?.time 
+                        ?: metadata.serverModified?.time 
+                        ?: System.currentTimeMillis()
                     Result.success(
                         RemoteMetadata(
                             path = metadata.pathLower ?: metadata.name,
                             revision = metadata.rev,
-                            modifiedTime = metadata.clientModified?.time 
-                                ?: metadata.serverModified?.time 
-                                ?: 0L,
+                            modifiedTime = modifiedTime,
                             size = metadata.size
                         )
                     )
@@ -181,14 +182,14 @@ class JvmDropboxClient(
             val props = Properties()
             props.load(credentialsPath.inputStream())
             val accessToken = props.getProperty("access_token")
-            val refreshToken = props.getProperty("refresh_token")
 
-            client = when {
-                refreshToken != null -> DbxClientV2(config, refreshToken, appKey)
-                accessToken != null -> DbxClientV2(config, accessToken)
-                else -> null
+            client = if (accessToken != null) {
+                DbxClientV2(config, accessToken)
+            } else {
+                null
             }
         } catch (e: Exception) {
+            e.printStackTrace()
             client = null
         }
     }

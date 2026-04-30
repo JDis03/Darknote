@@ -32,11 +32,14 @@ fun TreeView(
     onItemToggle: (TreeItem.FolderItem) -> Unit,
     onCreateSnippet: () -> Unit,
     onCreateFolder: () -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onRenameItem: (TreeItem) -> Unit,
+    onDeleteItem: (TreeItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         TreeHeader(onCreateSnippet = onCreateSnippet, onCreateFolder = onCreateFolder)
-        TreeSearchBar(query = state.searchQuery, onQueryChange = {})
+        TreeSearchBar(query = state.searchQuery, onQueryChange = onSearchQueryChange)
         Divider(color = MaterialTheme.colorScheme.outlineVariant)
 
         LazyColumn(
@@ -62,14 +65,18 @@ fun TreeView(
                             onToggleExpand = { 
                                 println("Folder toggle: ${item.id}")
                                 onItemToggle(item) 
-                            }
+                            },
+                            onRename = { onRenameItem(item) },
+                            onDelete = { onDeleteItem(item) }
                         )
                         is TreeItem.SnippetItem -> TreeItemView(
                             item = item.copy(isSelected = isSelected),
                             onClick = { 
                                 println("Snippet clicked: ${item.id}")
                                 onItemClick(item) 
-                            }
+                            },
+                            onRename = { onRenameItem(item) },
+                            onDelete = { onDeleteItem(item) }
                         )
                     }
                 }

@@ -14,8 +14,14 @@ import androidx.compose.ui.window.application
 import com.darknote.desktop.clipboard.DesktopClipboardManager
 import com.darknote.core.clipboard.ClipboardSanitizer
 import com.darknote.core.model.ClipboardSettings
+import com.darknote.core.storage.FileStorageService
+import com.darknote.desktop.data.DemoDataInitializer
 import com.darknote.desktop.ui.tree.*
+import com.darknote.desktop.ui.dialogs.RenameDialog
 import com.darknote.desktop.viewmodel.SnippetTreeViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 fun main() = application {
@@ -32,55 +38,160 @@ fun main() = application {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen() {
-    val viewModel = remember { SnippetTreeViewModel.create() }
+    val scope = rememberCoroutineScope()
+    
+    // Initialize database and repositories
+    val databaseFactory = remember {
+        com.darknote.persistence.database.DatabaseFactory(
+            com.darknote.persistence.database.DriverFactory()
+        )
+    }
+    
+    // Storage service
+    val storageService = remember {
+        FileStorageService(
+            File(System.getProperty("user.home"), ".config/darknote")
+        )
+    }
+    
+    val viewModel = remember {
+        SnippetTreeViewModel(
+            snippetRepository = databaseFactory.snippetRepository,
+            folderRepository = databaseFactory.folderRepository,
+            fileStorageService = storageService,
+            scope = scope
+        )
+    }
+    
     val clipboardManager = remember {
         DesktopClipboardManager(ClipboardSanitizer(ClipboardSettings.DEFAULT))
     }
     
+    // Initialize demo data on first launch
+    LaunchedEffect(Unit) {
+        val initializer = DemoDataInitializer(
+            folderRepository = databaseFactory.folderRepository,
+            snippetRepository = databaseFactory.snippetRepository,
+            fileStorageService = storageService
+        )
+        initializer.initializeIfEmpty()
+    }
+    
     val selectedItemId by viewModel.selectedItemId
-    val expandedFolders by viewModel.expandedFolderIds
-    val searchQuery by viewModel.searchQuery
     val visibleItems = viewModel.visibleItems
     
-    var selectedSnippetContent by remember { mutableStateOf("") }
-    var copiedMessage by remember { mutableStateOf<String?>(null) }
-    var showSettings by remember { mutableStateOf(false) }
+    // Editor state
+    var editorContent by remember { mutableStateOf("") }
+    var originalContent by remember { mutableStateOf("") }
+    var isModified by remember { mutableStateOf(false) }
+    var saveStatus by remember { mutableStateOf<SaveStatus>(SaveStatus.Idle) }
     
+    // Dialog states
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var itemToRename by remember { mutableStateOf<TreeItem?>(null) }
+    
+    // Selected snippet
+    val selectedSnippet = remember(selectedItemId) {
+        viewModel.getSelectedSnippet()
+    }
+    
+    // Load content when selection changes
     LaunchedEffect(selectedItemId) {
-        val snippet = viewModel.getSelectedSnippet()
-        selectedSnippetContent = snippet?.let {
-            when (it.name) {
-                "backup-database.sh" -> """#!/bin/bash
-# Backup script
-mysqldump -u root -p database > backup.sql"""
-                "nginx.conf" -> """server {
-    listen 80;
-    server_name example.com;
-}"""
-                else -> "# Snippet content for ${it.name}"
+        selectedSnippet?.let { snippet ->
+            val result = storageService.loadSnippetContent(snippet.localPath)
+            val content = result.getOrDefault(snippet.content)
+            editorContent = content
+            originalContent = content
+            isModified = false
+            saveStatus = SaveStatus.Idle
+        } ?: run {
+            editorContent = ""
+            originalContent = ""
+            isModified = false
+        }
+    }
+    
+    // Auto-save after delay
+    LaunchedEffect(editorContent) {
+        if (isModified && editorContent != originalContent) {
+            delay(2000) // 2 seconds auto-save
+            selectedSnippet?.let { snippet ->
+                saveStatus = SaveStatus.Saving
+                scope.launch {
+                    val updatedSnippet = snippet.copy(content = editorContent)
+                    val result = storageService.saveSnippetContent(updatedSnippet)
+                    if (result.isSuccess) {
+                        saveStatus = SaveStatus.Saved
+                        originalContent = editorContent
+                        isModified = false
+                        viewModel.updateSnippetContent(snippet.id, editorContent)
+                    } else {
+                        saveStatus = SaveStatus.Error
+                    }
+                }
             }
-        } ?: ""
+        }
     }
     
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("DarkNote") },
+                title = { 
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("DarkNote")
+                        if (isModified) {
+                            Text(
+                                " ●",
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        }
+                    }
+                },
                 actions = {
-                    // Sync status indicator (placeholder)
-                    IconButton(onClick = { showSettings = true }) {
-                        Icon(
-                            imageVector = Icons.Default.CloudOff,
-                            contentDescription = "Sync Status - Offline Mode"
+                    // Save status indicator
+                    when (saveStatus) {
+                        is SaveStatus.Saving -> CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
                         )
+                        is SaveStatus.Saved -> Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Saved",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        is SaveStatus.Error -> Icon(
+                            imageVector = Icons.Default.Error,
+                            contentDescription = "Error",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        else -> {}
                     }
                     
-                    // Settings button
-                    IconButton(onClick = { showSettings = true }) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings"
-                        )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    
+                    // Save button
+                    IconButton(
+                        onClick = {
+                            selectedSnippet?.let { snippet ->
+                                saveStatus = SaveStatus.Saving
+                                scope.launch {
+                                    val updatedSnippet = snippet.copy(content = editorContent)
+                                    val result = storageService.saveSnippetContent(updatedSnippet)
+                                    if (result.isSuccess) {
+                                        saveStatus = SaveStatus.Saved
+                                        originalContent = editorContent
+                                        isModified = false
+                                        viewModel.updateSnippetContent(snippet.id, editorContent)
+                                    } else {
+                                        saveStatus = SaveStatus.Error
+                                    }
+                                }
+                            }
+                        },
+                        enabled = isModified
+                    ) {
+                        Icon(Icons.Default.Save, "Save")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -99,12 +210,23 @@ mysqldump -u root -p database > backup.sql"""
                 state = TreeViewState(
                     items = visibleItems,
                     selectedItemId = selectedItemId,
-                    searchQuery = searchQuery
+                    searchQuery = viewModel.searchQuery.value
                 ),
                 onItemClick = { item -> viewModel.selectItem(item.id) },
                 onItemToggle = { folder -> viewModel.toggleFolder(folder.id) },
                 onCreateSnippet = { viewModel.createSnippet() },
                 onCreateFolder = { viewModel.createFolder() },
+                onSearchQueryChange = { query -> viewModel.updateSearchQuery(query) },
+                onRenameItem = { item ->
+                    itemToRename = item
+                    showRenameDialog = true
+                },
+                onDeleteItem = { item ->
+                    when (item) {
+                        is TreeItem.FolderItem -> viewModel.deleteFolder(item.id)
+                        is TreeItem.SnippetItem -> viewModel.deleteSnippet(item.id)
+                    }
+                },
                 modifier = Modifier.width(280.dp)
             )
             
@@ -120,10 +242,22 @@ mysqldump -u root -p database > backup.sql"""
                     .fillMaxHeight()
                     .padding(16.dp)
             ) {
-                if (selectedItemId != null && selectedSnippetContent.isNotEmpty()) {
+                if (selectedSnippet != null) {
+                    // Title
+                    Text(
+                        text = selectedSnippet.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    
+                    // Editor
                     OutlinedTextField(
-                        value = selectedSnippetContent,
-                        onValueChange = { selectedSnippetContent = it },
+                        value = editorContent,
+                        onValueChange = { 
+                            editorContent = it
+                            isModified = it != originalContent
+                            saveStatus = SaveStatus.Idle
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
@@ -136,14 +270,14 @@ mysqldump -u root -p database > backup.sql"""
                     
                     Spacer(modifier = Modifier.height(8.dp))
                     
+                    // Action buttons
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
                             onClick = {
-                                clipboardManager.copy(selectedSnippetContent, sanitize = true)
-                                copiedMessage = "Copied (sanitized)"
+                                clipboardManager.copy(editorContent, sanitize = true)
                             }
                         ) {
                             Text("Copy Sanitized")
@@ -151,21 +285,29 @@ mysqldump -u root -p database > backup.sql"""
                         
                         OutlinedButton(
                             onClick = {
-                                clipboardManager.copy(selectedSnippetContent, sanitize = false)
-                                copiedMessage = "Copied (raw)"
+                                clipboardManager.copy(editorContent, sanitize = false)
                             }
                         ) {
                             Text("Copy Raw")
                         }
                         
-                        copiedMessage?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.align(Alignment.CenterVertically)
-                            )
-                        }
+                        Spacer(modifier = Modifier.weight(1f))
+                        
+                        // Status text
+                        Text(
+                            text = when (saveStatus) {
+                                is SaveStatus.Saving -> "Saving..."
+                                is SaveStatus.Saved -> "Saved"
+                                is SaveStatus.Error -> "Error saving"
+                                else -> if (isModified) "Modified" else ""
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = when (saveStatus) {
+                                is SaveStatus.Saved -> MaterialTheme.colorScheme.primary
+                                is SaveStatus.Error -> MaterialTheme.colorScheme.error
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
                     }
                 } else {
                     // Empty state
@@ -193,73 +335,39 @@ mysqldump -u root -p database > backup.sql"""
             }
         }
         
-        // Settings Dialog (placeholder for sync settings)
-        if (showSettings) {
-            SettingsDialog(
-                onDismiss = { showSettings = false },
-                onConnectDropbox = { 
-                    // TODO: Open browser for OAuth
-                    println("Open Dropbox OAuth in browser")
+        // Rename dialog
+        if (showRenameDialog && itemToRename != null) {
+            RenameDialog(
+                title = when (itemToRename) {
+                    is TreeItem.FolderItem -> "Rename Folder"
+                    is TreeItem.SnippetItem -> "Rename Snippet"
+                    else -> "Rename"
+                },
+                currentName = itemToRename!!.name,
+                onDismiss = {
+                    showRenameDialog = false
+                    itemToRename = null
+                },
+                onConfirm = { newName ->
+                    when (val item = itemToRename) {
+                        is TreeItem.FolderItem -> viewModel.renameFolder(item.id, newName)
+                        is TreeItem.SnippetItem -> viewModel.renameSnippet(item.id, newName)
+                        null -> {} // Should not happen
+                    }
+                    showRenameDialog = false
+                    itemToRename = null
                 }
             )
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SettingsDialog(
-    onDismiss: () -> Unit,
-    onConnectDropbox: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Settings") },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Sync Section
-                Text(
-                    "Synchronization",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("Dropbox")
-                        Text(
-                            "Not connected",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    
-                    Button(onClick = onConnectDropbox) {
-                        Text("Connect")
-                    }
-                }
-                
-                Divider()
-                
-                // Info
-                Text(
-                    "Working in offline mode. Connect to Dropbox to sync across devices.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close")
-            }
-        }
-    )
+// Save status enum
+sealed class SaveStatus {
+    object Idle : SaveStatus()
+    object Saving : SaveStatus()
+    object Saved : SaveStatus()
+    object Error : SaveStatus()
 }
 
 @Preview
