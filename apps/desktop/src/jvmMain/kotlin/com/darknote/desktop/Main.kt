@@ -23,6 +23,8 @@ import com.darknote.desktop.ui.screens.SettingsScreen
 import com.darknote.desktop.viewmodel.SnippetTreeViewModel
 import com.darknote.desktop.viewmodel.AuthViewModel
 import com.darknote.sync.client.DropboxClientFactory
+import com.darknote.sync.engine.SyncEngine
+import com.darknote.sync.engine.SyncState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -79,10 +81,25 @@ fun MainScreen() {
         DesktopClipboardManager(ClipboardSanitizer(ClipboardSettings.DEFAULT))
     }
     
+    // Dropbox client
+    val dropboxClient = remember { DropboxClientFactory.create() }
+    
+    // Sync Engine
+    val syncEngine = remember {
+        SyncEngine(
+            snippetRepository = databaseFactory.snippetRepository,
+            dropboxClient = dropboxClient,
+            coroutineScope = scope
+        )
+    }
+    
     // Auth ViewModel
     val authViewModel = remember {
-        AuthViewModel(DropboxClientFactory.create())
+        AuthViewModel(dropboxClient)
     }
+    
+    // Sync state
+    val syncState by syncEngine.syncState.collectAsState()
     
     // Initialize demo data on first launch
     LaunchedEffect(Unit) {
@@ -213,6 +230,11 @@ fun MainScreen() {
                                         originalContent = editorContent
                                         isModified = false
                                         viewModel.updateSnippetContent(snippet.id, editorContent)
+                                        
+                                        // Auto-sync after save if authenticated
+                                        if (dropboxClient.isAuthorized()) {
+                                            syncEngine.sync()
+                                        }
                                     } else {
                                         saveStatus = SaveStatus.Error
                                     }
@@ -222,6 +244,37 @@ fun MainScreen() {
                         enabled = isModified
                     ) {
                         Icon(Icons.Default.Save, "Save")
+                    }
+                    
+                    Spacer(modifier = Modifier.width(8.dp))
+                    
+                    // Sync status indicator
+                    when (syncState) {
+                        is SyncState.Syncing -> {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                        is SyncState.Error -> {
+                            Icon(
+                                imageVector = Icons.Default.CloudOff,
+                                contentDescription = "Sync error",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        else -> {
+                            // Show cloud icon if authenticated
+                            if (dropboxClient.isAuthorized()) {
+                                Icon(
+                                    imageVector = Icons.Default.Cloud,
+                                    contentDescription = "Synced",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
                     }
                     }
                 },
