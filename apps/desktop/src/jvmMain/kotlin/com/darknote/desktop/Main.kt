@@ -13,6 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import com.darknote.desktop.clipboard.DesktopClipboardManager
+import com.darknote.core.clipboard.ClipboardSanitizer
+import com.darknote.core.model.ClipboardSettings
 
 fun main() = application {
     Window(
@@ -27,7 +30,10 @@ fun main() = application {
 
 @Composable
 fun MainScreen() {
-    var selectedSnippet by remember { mutableStateOf<String?>(null) }
+    var copiedText by remember { mutableStateOf<String?>(null) }
+    val clipboardManager = remember {
+        DesktopClipboardManager(ClipboardSanitizer(ClipboardSettings.DEFAULT))
+    }
 
     Scaffold(
         topBar = {
@@ -44,7 +50,7 @@ fun MainScreen() {
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Sidebar with tree (placeholder)
+            // Sidebar
             Box(
                 modifier = Modifier
                     .width(250.dp)
@@ -52,7 +58,7 @@ fun MainScreen() {
                     .padding(8.dp)
             ) {
                 Text(
-                    "Snippet Tree\n(Árbol de carpetas y snippets)",
+                    "Snippet Tree\n\n- Scripts\n- Configs\n- Commands",
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -62,7 +68,7 @@ fun MainScreen() {
                 color = MaterialTheme.colorScheme.outlineVariant
             )
 
-            // Main editor area (placeholder)
+            // Main content
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -75,20 +81,39 @@ fun MainScreen() {
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
-                        "Editor de Snippets",
+                        "Fase 2: Core y Domain ✅",
                         style = MaterialTheme.typography.headlineMedium
                     )
                     Text(
-                        "Fase 1: KMP Setup ✅\n" +
-                        "Texto plano puro - Sin markdown\n" +
-                        "Copiar sanitizado para terminal",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        "Clipboard Sanitizer funcionando",
+                        style = MaterialTheme.typography.bodyLarge
                     )
+                    
+                    // Demo de clipboard sanitizado
+                    var inputText by remember { mutableStateOf("curl\\r\\nhttp://example.com") }
+                    
+                    OutlinedTextField(
+                        value = inputText,
+                        onValueChange = { inputText = it },
+                        label = { Text("Texto a copiar") },
+                        modifier = Modifier.width(400.dp)
+                    )
+                    
                     Button(
-                        onClick = { /* Copy sanitized */ }
+                        onClick = {
+                            clipboardManager.copy(inputText, sanitize = true)
+                            copiedText = "Copiado (sanitizado): ${inputText.take(50)}..."
+                        }
                     ) {
-                        Text("📋 Copiar (Sanitizado)")
+                        Text("📋 Copiar Sanitizado")
+                    }
+                    
+                    copiedText?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
