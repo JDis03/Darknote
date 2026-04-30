@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -42,7 +43,7 @@ fun SettingsScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onClose) {
-                        Icon(Icons.Default.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -170,7 +171,7 @@ fun SettingsScreen(
                                 onClick = { authViewModel.startAuth() },
                                 modifier = Modifier.fillMaxWidth().height(48.dp)
                             ) {
-                                Icon(Icons.Default.Login, null, modifier = Modifier.size(20.dp))
+                                Icon(Icons.AutoMirrored.Filled.Login, null, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("Connect to Dropbox")
                             }
@@ -426,7 +427,7 @@ fun SettingsScreen(
                                     contentColor = MaterialTheme.colorScheme.error
                                 )
                             ) {
-                                Icon(Icons.Default.Logout, null, modifier = Modifier.size(20.dp))
+                                Icon(Icons.AutoMirrored.Filled.Logout, null, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("Disconnect from Dropbox")
                             }
@@ -555,7 +556,7 @@ fun SettingsScreen(
                                 label = "Database",
                                 path = "~/.config/darknote/darknote.db"
                             )
-                            Divider()
+                            HorizontalDivider()
                             StorageItem(
                                 icon = Icons.Default.Description,
                                 label = "Snippets",

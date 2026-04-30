@@ -314,7 +314,7 @@ fun MainScreen() {
                 modifier = Modifier.width(280.dp)
             )
             
-            Divider(
+            HorizontalDivider(
                 modifier = Modifier.fillMaxHeight().width(1.dp),
                 color = MaterialTheme.colorScheme.outlineVariant
             )

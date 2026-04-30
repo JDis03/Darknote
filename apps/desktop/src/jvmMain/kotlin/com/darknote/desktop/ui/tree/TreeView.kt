@@ -40,7 +40,7 @@ fun TreeView(
     Column(modifier = modifier.fillMaxSize()) {
         TreeHeader(onCreateSnippet = onCreateSnippet, onCreateFolder = onCreateFolder)
         TreeSearchBar(query = state.searchQuery, onQueryChange = onSearchQueryChange)
-        Divider(color = MaterialTheme.colorScheme.outlineVariant)
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         LazyColumn(
             modifier = Modifier.weight(1f),
