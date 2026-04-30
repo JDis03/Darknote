@@ -1,0 +1,166 @@
+import kotlin.Boolean;
+
+-- Snippet table for storing snippet metadata
+CREATE TABLE IF NOT EXISTS snippet (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    folder_id TEXT,
+    tags TEXT,
+    language TEXT,
+    is_favorite INTEGER AS Boolean DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    modified_at INTEGER NOT NULL,
+    sync_status TEXT NOT NULL,
+    local_path TEXT NOT NULL,
+    doc_path TEXT,
+    FOREIGN KEY (folder_id) REFERENCES folder(id) ON DELETE SET NULL
+);
+
+-- Folder table for hierarchical organization
+CREATE TABLE IF NOT EXISTS folder (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    parent_id TEXT,
+    sort_order INTEGER DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (parent_id) REFERENCES folder(id) ON DELETE CASCADE
+);
+
+-- Snippet metadata for sync and usage tracking
+CREATE TABLE IF NOT EXISTS snippet_metadata (
+    snippet_id TEXT PRIMARY KEY,
+    usage_count INTEGER DEFAULT 0,
+    last_copied_at INTEGER,
+    dropbox_rev TEXT,
+    local_hash TEXT NOT NULL,
+    last_sync_at INTEGER,
+    conflict_status TEXT,
+    FOREIGN KEY (snippet_id) REFERENCES snippet(id) ON DELETE CASCADE
+);
+
+-- Tag table for cross-folder categorization
+CREATE TABLE IF NOT EXISTS tag (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    color TEXT,
+    created_at INTEGER NOT NULL
+);
+
+-- User settings
+CREATE TABLE IF NOT EXISTS clipboard_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1), -- Singleton
+    auto_sanitize INTEGER AS Boolean DEFAULT 1,
+    remove_html INTEGER AS Boolean DEFAULT 1,
+    normalize_newlines INTEGER AS Boolean DEFAULT 1,
+    trim_whitespace INTEGER AS Boolean DEFAULT 1,
+    remove_zero_width INTEGER AS Boolean DEFAULT 1
+);
+
+-- Insert default settings
+INSERT OR IGNORE INTO clipboard_settings (id) VALUES (1);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_snippet_folder ON snippet(folder_id);
+CREATE INDEX IF NOT EXISTS idx_snippet_modified ON snippet(modified_at);
+CREATE INDEX IF NOT EXISTS idx_snippet_favorite ON snippet(is_favorite);
+CREATE INDEX IF NOT EXISTS idx_folder_parent ON folder(parent_id);
+
+-- Snippet queries
+selectAllSnippets:
+SELECT * FROM snippet
+ORDER BY modified_at DESC;
+
+selectSnippetsByFolder:
+SELECT * FROM snippet
+WHERE folder_id = ?
+ORDER BY modified_at DESC;
+
+selectSnippetById:
+SELECT * FROM snippet
+WHERE id = ?;
+
+selectFavoriteSnippets:
+SELECT * FROM snippet
+WHERE is_favorite = 1
+ORDER BY modified_at DESC;
+
+insertSnippet:
+INSERT INTO snippet (id, title, folder_id, tags, language, is_favorite, created_at, modified_at, sync_status, local_path, doc_path)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateSnippet:
+UPDATE snippet
+SET title = ?, folder_id = ?, tags = ?, language = ?, is_favorite = ?, modified_at = ?, sync_status = ?, local_path = ?, doc_path = ?
+WHERE id = ?;
+
+deleteSnippet:
+DELETE FROM snippet
+WHERE id = ?;
+
+-- Folder queries
+selectAllFolders:
+SELECT * FROM folder
+ORDER BY sort_order, name;
+
+selectRootFolders:
+SELECT * FROM folder
+WHERE parent_id IS NULL
+ORDER BY sort_order, name;
+
+selectSubfolders:
+SELECT * FROM folder
+WHERE parent_id = ?
+ORDER BY sort_order, name;
+
+selectFolderById:
+SELECT * FROM folder
+WHERE id = ?;
+
+insertFolder:
+INSERT INTO folder (id, name, parent_id, sort_order, created_at)
+VALUES (?, ?, ?, ?, ?);
+
+updateFolder:
+UPDATE folder
+SET name = ?, parent_id = ?, sort_order = ?
+WHERE id = ?;
+
+deleteFolder:
+DELETE FROM folder
+WHERE id = ?;
+
+-- Metadata queries
+selectMetadataBySnippetId:
+SELECT * FROM snippet_metadata
+WHERE snippet_id = ?;
+
+-- Upsert usando REPLACE (más compatible)
+insertOrReplaceMetadata:
+REPLACE INTO snippet_metadata (snippet_id, usage_count, last_copied_at, dropbox_rev, local_hash, last_sync_at, conflict_status)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+incrementUsageCount:
+UPDATE snippet_metadata
+SET usage_count = usage_count + 1, last_copied_at = ?
+WHERE snippet_id = ?;
+
+-- Search
+searchSnippets:
+SELECT * FROM snippet
+WHERE title LIKE '%' || ? || '%'
+   OR tags LIKE '%' || ? || '%'
+ORDER BY modified_at DESC;
+
+-- Settings queries
+selectSettings:
+SELECT * FROM clipboard_settings
+WHERE id = 1;
+
+updateSettings:
+UPDATE clipboard_settings
+SET auto_sanitize = ?,
+    remove_html = ?,
+    normalize_newlines = ?,
+    trim_whitespace = ?,
+    remove_zero_width = ?
+WHERE id = 1;

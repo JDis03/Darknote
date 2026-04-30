@@ -4,3 +4,8 @@ build/
 *.class
 *.log
 local.properties
+kate/
+joplin/
+# Gradle wrapper
+gradle-8.8/
+gradle-8.8-bin.zip
