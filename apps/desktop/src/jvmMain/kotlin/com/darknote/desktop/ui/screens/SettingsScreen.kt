@@ -1,6 +1,7 @@
 package com.darknote.desktop.ui.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -11,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.darknote.desktop.viewmodel.AuthState
 import com.darknote.desktop.viewmodel.AuthViewModel
+import com.darknote.desktop.viewmodel.LogType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -21,6 +23,7 @@ fun SettingsScreen(
 ) {
     val authState by authViewModel.authState
     val authUrl by authViewModel.authUrl
+    val syncLogs by authViewModel.syncLogs
     
     var authCode by remember { mutableStateOf("") }
     
@@ -52,9 +55,14 @@ fun SettingsScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Main content (scrollable)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
         
             // Dropbox Sync Section
             ElevatedCard(
@@ -385,6 +393,32 @@ fun SettingsScreen(
                             
                             Spacer(modifier = Modifier.height(16.dp))
                             
+                            // Test buttons for sync verification
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                FilledTonalButton(
+                                    onClick = { authViewModel.testUpload() },
+                                    modifier = Modifier.weight(1f).height(48.dp)
+                                ) {
+                                    Icon(Icons.Default.CloudUpload, null, modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Test Upload")
+                                }
+                                
+                                FilledTonalButton(
+                                    onClick = { authViewModel.testDownload() },
+                                    modifier = Modifier.weight(1f).height(48.dp)
+                                ) {
+                                    Icon(Icons.Default.CloudDownload, null, modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Test Download")
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
                             OutlinedButton(
                                 onClick = { authViewModel.logout() },
                                 modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -572,6 +606,105 @@ fun SettingsScreen(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+                    }
+                }
+            }
+            }
+            
+            // Debug Panel at bottom (fixed, non-scrollable)
+            if (syncLogs.isNotEmpty()) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    tonalElevation = 2.dp
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        // Header
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.BugReport,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    "Sync Debug Console",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(
+                                onClick = { authViewModel.clearLogs() },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Clear,
+                                    contentDescription = "Clear logs",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                        
+                        HorizontalDivider()
+                        
+                        // Logs (scrollable)
+                        androidx.compose.foundation.lazy.LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            reverseLayout = true // Latest logs at bottom
+                        ) {
+                            items(syncLogs.reversed()) { log ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Text(
+                                        text = log.timestamp,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.width(60.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Icon(
+                                        imageVector = when (log.type) {
+                                            LogType.SUCCESS -> Icons.Default.CheckCircle
+                                            LogType.ERROR -> Icons.Default.Error
+                                            LogType.WARNING -> Icons.Default.Warning
+                                            LogType.INFO -> Icons.Default.Info
+                                        },
+                                        contentDescription = null,
+                                        tint = when (log.type) {
+                                            LogType.SUCCESS -> androidx.compose.ui.graphics.Color(0xFF4CAF50)
+                                            LogType.ERROR -> MaterialTheme.colorScheme.error
+                                            LogType.WARNING -> androidx.compose.ui.graphics.Color(0xFFFFC107)
+                                            LogType.INFO -> MaterialTheme.colorScheme.primary
+                                        },
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = log.message,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
                         }
                     }
                 }

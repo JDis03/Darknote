@@ -25,6 +25,9 @@ kotlin {
 
                 // Serialization
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.0")
+                
+                // Logging (SLF4J implementation for Dropbox SDK)
+                implementation("org.slf4j:slf4j-simple:2.0.9")
             }
         }
     }

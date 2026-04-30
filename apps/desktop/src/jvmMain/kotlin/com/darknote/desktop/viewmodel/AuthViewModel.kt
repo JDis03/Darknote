@@ -21,7 +21,20 @@ class AuthViewModel(
     private val _authUrl = mutableStateOf<String?>(null)
     val authUrl: State<String?> = _authUrl
 
+    private val _syncLogs = mutableStateOf<List<SyncLog>>(emptyList())
+    val syncLogs: State<List<SyncLog>> = _syncLogs
+
     private val viewModelScope = CoroutineScope(Dispatchers.IO)
+
+    private fun addLog(message: String, type: LogType = LogType.INFO) {
+        val timestamp = java.text.SimpleDateFormat("HH:mm:ss").format(java.util.Date())
+        val log = SyncLog(
+            timestamp = timestamp,
+            message = message,
+            type = type
+        )
+        _syncLogs.value = (_syncLogs.value + log).takeLast(50) // Keep last 50 logs
+    }
 
     /**
      * Check if already authorized.
@@ -127,6 +140,73 @@ class AuthViewModel(
     }
 
     /**
+     * Test upload - uploads a test file to verify sync works.
+     */
+    fun testUpload() {
+        viewModelScope.launch {
+            try {
+                addLog("Starting test upload...", LogType.INFO)
+                val timestamp = System.currentTimeMillis()
+                val testContent = "Test snippet content created at $timestamp"
+                
+                // Create temp file
+                val tempFile = java.io.File.createTempFile("test-snippet-$timestamp", ".txt")
+                tempFile.writeText(testContent)
+                
+                val remotePath = "/darknote/test-snippet-$timestamp.txt"
+                addLog("Uploading to $remotePath", LogType.INFO)
+                
+                val result = dropboxClient.uploadFile(tempFile.absolutePath, remotePath)
+                
+                if (result.isSuccess) {
+                    addLog("Upload successful! Rev: ${result.getOrNull()}", LogType.SUCCESS)
+                } else {
+                    addLog("Upload failed: ${result.exceptionOrNull()?.message}", LogType.ERROR)
+                }
+                
+                // Cleanup temp file
+                tempFile.delete()
+            } catch (e: Exception) {
+                addLog("Upload exception: ${e.message}", LogType.ERROR)
+                e.printStackTrace()
+            }
+        }
+    }
+
+    /**
+     * Test download - lists files in Dropbox to verify sync works.
+     */
+    fun testDownload() {
+        viewModelScope.launch {
+            try {
+                addLog("Listing files in /darknote...", LogType.INFO)
+                
+                val result = dropboxClient.listFiles("/darknote")
+                
+                if (result.isSuccess) {
+                    val files = result.getOrNull() ?: emptyList()
+                    addLog("Found ${files.size} files in Dropbox", LogType.SUCCESS)
+                    files.forEach { file ->
+                        addLog("  ${file.name} (${file.size} bytes)", LogType.INFO)
+                    }
+                } else {
+                    addLog("List files failed: ${result.exceptionOrNull()?.message}", LogType.ERROR)
+                }
+            } catch (e: Exception) {
+                addLog("List exception: ${e.message}", LogType.ERROR)
+                e.printStackTrace()
+            }
+        }
+    }
+    
+    /**
+     * Clear sync logs.
+     */
+    fun clearLogs() {
+        _syncLogs.value = emptyList()
+    }
+
+    /**
      * Authentication states.
      */
 }
@@ -138,4 +218,17 @@ sealed class AuthState {
     object Authenticated : AuthState()
     object Offline : AuthState()  // Continue without Dropbox
     data class Error(val message: String) : AuthState()
+}
+
+data class SyncLog(
+    val timestamp: String,
+    val message: String,
+    val type: LogType
+)
+
+enum class LogType {
+    INFO,
+    SUCCESS,
+    ERROR,
+    WARNING
 }

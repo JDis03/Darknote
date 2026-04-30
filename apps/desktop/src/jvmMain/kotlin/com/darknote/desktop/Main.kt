@@ -1,6 +1,7 @@
 package com.darknote.desktop
 
 import androidx.compose.desktop.ui.tooling.preview.Preview
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -25,6 +26,14 @@ import com.darknote.sync.client.DropboxClientFactory
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
+
+// Save status enum
+sealed class SaveStatus {
+    object Idle : SaveStatus()
+    object Saving : SaveStatus()
+    object Saved : SaveStatus()
+    object Error : SaveStatus()
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 fun main() = application {
@@ -92,7 +101,7 @@ fun MainScreen() {
     var editorContent by remember { mutableStateOf("") }
     var originalContent by remember { mutableStateOf("") }
     var isModified by remember { mutableStateOf(false) }
-    var saveStatus by remember { mutableStateOf<SaveStatus>(SaveStatus.Idle) }
+    var saveStatus by remember { mutableStateOf<SaveStatus>(SaveStatus.Idle as SaveStatus) }
     
     // Dialog states
     var showRenameDialog by remember { mutableStateOf(false) }
@@ -147,8 +156,8 @@ fun MainScreen() {
             TopAppBar(
                 title = { 
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("DarkNote")
-                        if (isModified) {
+                        Text(if (showSettings) "DarkNote - Settings" else "DarkNote")
+                        if (!showSettings && isModified) {
                             Text(
                                 " ●",
                                 color = MaterialTheme.colorScheme.primary,
@@ -158,36 +167,41 @@ fun MainScreen() {
                     }
                 },
                 actions = {
-                    // Settings button
-                    IconButton(onClick = { showSettings = true }) {
-                        Icon(Icons.Default.Settings, "Settings")
+                    // Settings/Home button
+                    IconButton(onClick = { showSettings = !showSettings }) {
+                        Icon(
+                            if (showSettings) Icons.Default.Home else Icons.Default.Settings,
+                            if (showSettings) "Back to Main" else "Settings"
+                        )
                     }
                     
-                    Spacer(modifier = Modifier.width(8.dp))
                     
-                    // Save status indicator
-                    when (saveStatus) {
-                        is SaveStatus.Saving -> CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp
-                        )
-                        is SaveStatus.Saved -> Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Saved",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        is SaveStatus.Error -> Icon(
-                            imageVector = Icons.Default.Error,
-                            contentDescription = "Error",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                        else -> {}
-                    }
-                    
-                    Spacer(modifier = Modifier.width(8.dp))
-                    
-                    // Save button
-                    IconButton(
+                    if (!showSettings) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        
+                        // Save status indicator
+                        when (saveStatus) {
+                            is SaveStatus.Saving -> CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                            is SaveStatus.Saved -> Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Saved",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            is SaveStatus.Error -> Icon(
+                                imageVector = Icons.Default.Error,
+                                contentDescription = "Error",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                            else -> {}
+                        }
+                        
+                        Spacer(modifier = Modifier.width(8.dp))
+                        
+                        // Save button
+                        IconButton(
                         onClick = {
                             selectedSnippet?.let { snippet ->
                                 saveStatus = SaveStatus.Saving
@@ -208,6 +222,7 @@ fun MainScreen() {
                         enabled = isModified
                     ) {
                         Icon(Icons.Default.Save, "Save")
+                    }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -376,23 +391,21 @@ fun MainScreen() {
             )
         }
         
-        // Settings screen overlay
+        // Settings screen - full replacement
         if (showSettings) {
-            SettingsScreen(
-                authViewModel = authViewModel,
-                onClose = { showSettings = false },
-                modifier = Modifier.fillMaxSize()
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
+                SettingsScreen(
+                    authViewModel = authViewModel,
+                    onClose = { showSettings = false },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
     }
-}
-
-// Save status enum
-sealed class SaveStatus {
-    object Idle : SaveStatus()
-    object Saving : SaveStatus()
-    object Saved : SaveStatus()
-    object Error : SaveStatus()
 }
 
 @Preview
