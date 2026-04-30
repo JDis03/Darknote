@@ -43,12 +43,53 @@ class AuthViewModel(
                 _authState.value = AuthState.Authorizing
                 val url = dropboxClient.getAuthUrl()
                 _authUrl.value = url
+                
+                println("Auth URL: $url")
 
-                // Open browser automatically
-                if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-                    Desktop.getDesktop().browse(URI(url))
+                // Try multiple methods to open browser
+                var opened = false
+                
+                // Method 1: Java Desktop API
+                if (Desktop.isDesktopSupported()) {
+                    val desktop = Desktop.getDesktop()
+                    if (desktop.isSupported(Desktop.Action.BROWSE)) {
+                        try {
+                            desktop.browse(URI(url))
+                            opened = true
+                            println("Browser opened successfully via Desktop API")
+                        } catch (e: Exception) {
+                            println("Failed to open via Desktop API: ${e.message}")
+                        }
+                    }
+                }
+                
+                // Method 2: xdg-open (Linux)
+                if (!opened) {
+                    try {
+                        ProcessBuilder("xdg-open", url).start()
+                        opened = true
+                        println("Browser opened successfully via xdg-open")
+                    } catch (e: Exception) {
+                        println("Failed to open via xdg-open: ${e.message}")
+                    }
+                }
+                
+                // Method 3: gnome-open (GNOME)
+                if (!opened) {
+                    try {
+                        ProcessBuilder("gnome-open", url).start()
+                        opened = true
+                        println("Browser opened successfully via gnome-open")
+                    } catch (e: Exception) {
+                        println("Failed to open via gnome-open: ${e.message}")
+                    }
+                }
+                
+                if (!opened) {
+                    println("WARNING: Could not open browser automatically. Please copy the URL manually.")
                 }
             } catch (e: Exception) {
+                e.printStackTrace()
                 _authState.value = AuthState.Error(e.message ?: "Unknown error")
             }
         }
