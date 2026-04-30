@@ -4,26 +4,33 @@ plugins {
 }
 
 kotlin {
-    // Solo JVM por ahora - Android se agregará después
     jvm()
 
     sourceSets {
-        commonMain.dependencies {
-            implementation(project(":shared:core"))
-            implementation(project(":shared:persistence"))
+        val commonMain by getting {
+            dependencies {
+                implementation(project(":shared:core"))
+                implementation(project(":shared:persistence"))
 
-            // Dropbox
-            implementation("com.dropbox.core:dropbox-core-sdk:6.0.0")
+                // Serialization
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.0")
 
-            // Serialization
-            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.0")
-
-            // Coroutines
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+                // Coroutines
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+            }
         }
 
-        commonTest.dependencies {
-            implementation(kotlin("test"))
+        val jvmMain by getting {
+            dependencies {
+                // Dropbox SDK (JVM only)
+                implementation("com.dropbox.core:dropbox-core-sdk:6.0.0")
+            }
+        }
+
+        val commonTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+            }
         }
     }
 }
