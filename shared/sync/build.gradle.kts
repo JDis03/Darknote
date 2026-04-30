@@ -22,8 +22,8 @@ kotlin {
 
         val jvmMain by getting {
             dependencies {
-                // Dropbox SDK (JVM only)
-                implementation("com.dropbox.core:dropbox-core-sdk:6.0.0")
+                // Dropbox SDK (JVM only) - v7.0.0+ required for SSL certificate compatibility
+                implementation("com.dropbox.core:dropbox-core-sdk:7.0.0")
             }
         }
 
