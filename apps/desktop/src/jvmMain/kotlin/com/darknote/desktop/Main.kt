@@ -18,7 +18,10 @@ import com.darknote.core.storage.FileStorageService
 import com.darknote.desktop.data.DemoDataInitializer
 import com.darknote.desktop.ui.tree.*
 import com.darknote.desktop.ui.dialogs.RenameDialog
+import com.darknote.desktop.ui.screens.SettingsScreen
 import com.darknote.desktop.viewmodel.SnippetTreeViewModel
+import com.darknote.desktop.viewmodel.AuthViewModel
+import com.darknote.sync.client.DropboxClientFactory
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -67,6 +70,11 @@ fun MainScreen() {
         DesktopClipboardManager(ClipboardSanitizer(ClipboardSettings.DEFAULT))
     }
     
+    // Auth ViewModel
+    val authViewModel = remember {
+        AuthViewModel(DropboxClientFactory.create())
+    }
+    
     // Initialize demo data on first launch
     LaunchedEffect(Unit) {
         val initializer = DemoDataInitializer(
@@ -89,6 +97,7 @@ fun MainScreen() {
     // Dialog states
     var showRenameDialog by remember { mutableStateOf(false) }
     var itemToRename by remember { mutableStateOf<TreeItem?>(null) }
+    var showSettings by remember { mutableStateOf(false) }
     
     // Selected snippet
     val selectedSnippet = remember(selectedItemId) {
@@ -149,6 +158,13 @@ fun MainScreen() {
                     }
                 },
                 actions = {
+                    // Settings button
+                    IconButton(onClick = { showSettings = true }) {
+                        Icon(Icons.Default.Settings, "Settings")
+                    }
+                    
+                    Spacer(modifier = Modifier.width(8.dp))
+                    
                     // Save status indicator
                     when (saveStatus) {
                         is SaveStatus.Saving -> CircularProgressIndicator(
@@ -357,6 +373,15 @@ fun MainScreen() {
                     showRenameDialog = false
                     itemToRename = null
                 }
+            )
+        }
+        
+        // Settings screen overlay
+        if (showSettings) {
+            SettingsScreen(
+                authViewModel = authViewModel,
+                onClose = { showSettings = false },
+                modifier = Modifier.fillMaxSize()
             )
         }
     }
