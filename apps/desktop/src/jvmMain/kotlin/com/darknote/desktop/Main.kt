@@ -9,6 +9,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -125,6 +128,11 @@ fun MainScreen() {
     var itemToRename by remember { mutableStateOf<TreeItem?>(null) }
     var showSettings by remember { mutableStateOf(false) }
     
+    // Focus tracking for keyboard shortcut guards
+    var isEditorFocused by remember { mutableStateOf(false) }
+    var isSearchFocused by remember { mutableStateOf(false) }
+    val searchFocusRequester = remember { FocusRequester() }
+    
     // Selected snippet
     val selectedSnippet = remember(selectedItemId) {
         viewModel.getSelectedSnippet()
@@ -168,7 +176,97 @@ fun MainScreen() {
         }
     }
     
+    // Save action (reused by Ctrl+S and Save button)
+    fun performSave() {
+        selectedSnippet?.let { snippet ->
+            saveStatus = SaveStatus.Saving
+            scope.launch {
+                val updatedSnippet = snippet.copy(content = editorContent)
+                val result = storageService.saveSnippetContent(updatedSnippet)
+                if (result.isSuccess) {
+                    saveStatus = SaveStatus.Saved
+                    originalContent = editorContent
+                    isModified = false
+                    viewModel.updateSnippetContent(snippet.id, editorContent)
+                    if (dropboxClient.isAuthorized()) {
+                        syncEngine.sync()
+                    }
+                } else {
+                    saveStatus = SaveStatus.Error
+                }
+            }
+        }
+    }
+
     Scaffold(
+        modifier = Modifier.onPreviewKeyEvent { keyEvent ->
+            // Only handle key down events
+            if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+
+            val isCtrl = keyEvent.isCtrlPressed
+            val isShift = keyEvent.isShiftPressed
+
+            when {
+                // Ctrl+S - Save
+                isCtrl && !isShift && keyEvent.key == Key.S -> {
+                    // Don't intercept if search bar is focused (allow normal typing)
+                    if (!isSearchFocused) {
+                        performSave()
+                        true
+                    } else false
+                }
+
+                // Ctrl+N - New snippet
+                isCtrl && !isShift && keyEvent.key == Key.N -> {
+                    viewModel.createSnippet()
+                    true
+                }
+
+                // Ctrl+Shift+N - New folder
+                isCtrl && isShift && keyEvent.key == Key.N -> {
+                    viewModel.createFolder()
+                    true
+                }
+
+                // Ctrl+F - Focus search bar
+                isCtrl && !isShift && keyEvent.key == Key.F -> {
+                    searchFocusRequester.requestFocus()
+                    true
+                }
+
+                // Delete - Delete selected item
+                !isCtrl && keyEvent.key == Key.Delete -> {
+                    // Don't fire if editor has focus (editor needs Delete key)
+                    if (!isEditorFocused && selectedItemId != null) {
+                        val itemToDelete = visibleItems.find {
+                            it.item.id == selectedItemId
+                        }?.item
+                        when (itemToDelete) {
+                            is TreeItem.FolderItem -> viewModel.deleteFolder(itemToDelete.id)
+                            is TreeItem.SnippetItem -> viewModel.deleteSnippet(itemToDelete.id)
+                            else -> {}
+                        }
+                        true
+                    } else false
+                }
+
+                // F2 - Rename selected item
+                !isCtrl && keyEvent.key == Key.F2 -> {
+                    if (!isEditorFocused && selectedItemId != null) {
+                        val itemToRenameShortcut = visibleItems.find {
+                            it.item.id == selectedItemId
+                        }?.item
+                        if (itemToRenameShortcut != null) {
+                            itemToRename = itemToRenameShortcut
+                            showRenameDialog = true
+                        }
+                        true
+                    } else false
+                }
+
+                else -> false
+            }
+        },
         topBar = {
             TopAppBar(
                 title = { 
@@ -219,28 +317,7 @@ fun MainScreen() {
                         
                         // Save button
                         IconButton(
-                        onClick = {
-                            selectedSnippet?.let { snippet ->
-                                saveStatus = SaveStatus.Saving
-                                scope.launch {
-                                    val updatedSnippet = snippet.copy(content = editorContent)
-                                    val result = storageService.saveSnippetContent(updatedSnippet)
-                                    if (result.isSuccess) {
-                                        saveStatus = SaveStatus.Saved
-                                        originalContent = editorContent
-                                        isModified = false
-                                        viewModel.updateSnippetContent(snippet.id, editorContent)
-                                        
-                                        // Auto-sync after save if authenticated
-                                        if (dropboxClient.isAuthorized()) {
-                                            syncEngine.sync()
-                                        }
-                                    } else {
-                                        saveStatus = SaveStatus.Error
-                                    }
-                                }
-                            }
-                        },
+                        onClick = { performSave() },
                         enabled = isModified
                     ) {
                         Icon(Icons.Default.Save, "Save")
@@ -311,6 +388,8 @@ fun MainScreen() {
                         is TreeItem.SnippetItem -> viewModel.deleteSnippet(item.id)
                     }
                 },
+                searchFocusRequester = searchFocusRequester,
+                onSearchFocusChanged = { focused -> isSearchFocused = focused },
                 modifier = Modifier.width(280.dp)
             )
             
@@ -344,7 +423,10 @@ fun MainScreen() {
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f),
+                            .weight(1f)
+                            .onFocusChanged { focusState ->
+                                isEditorFocused = focusState.isFocused
+                            },
                         textStyle = MaterialTheme.typography.bodyMedium,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedContainerColor = MaterialTheme.colorScheme.surface,

@@ -11,6 +11,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 
 data class TreeViewState(
@@ -35,11 +38,18 @@ fun TreeView(
     onSearchQueryChange: (String) -> Unit,
     onRenameItem: (TreeItem) -> Unit,
     onDeleteItem: (TreeItem) -> Unit,
+    searchFocusRequester: FocusRequester = remember { FocusRequester() },
+    onSearchFocusChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         TreeHeader(onCreateSnippet = onCreateSnippet, onCreateFolder = onCreateFolder)
-        TreeSearchBar(query = state.searchQuery, onQueryChange = onSearchQueryChange)
+        TreeSearchBar(
+            query = state.searchQuery,
+            onQueryChange = onSearchQueryChange,
+            focusRequester = searchFocusRequester,
+            onFocusChanged = onSearchFocusChanged
+        )
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         LazyColumn(
@@ -111,7 +121,12 @@ private fun TreeHeader(onCreateSnippet: () -> Unit, onCreateFolder: () -> Unit) 
 }
 
 @Composable
-private fun TreeSearchBar(query: String, onQueryChange: (String) -> Unit) {
+private fun TreeSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    focusRequester: FocusRequester = remember { FocusRequester() },
+    onFocusChanged: (Boolean) -> Unit = {}
+) {
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
@@ -123,7 +138,9 @@ private fun TreeSearchBar(query: String, onQueryChange: (String) -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 4.dp)
-            .height(40.dp),
+            .height(40.dp)
+            .focusRequester(focusRequester)
+            .onFocusChanged { focusState -> onFocusChanged(focusState.isFocused) },
         textStyle = MaterialTheme.typography.bodySmall
     )
 }
