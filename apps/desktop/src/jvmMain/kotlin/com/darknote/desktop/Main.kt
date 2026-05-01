@@ -142,6 +142,20 @@ fun MainScreen() {
     // Sync state
     val syncState by syncEngine.syncState.collectAsState()
     
+    // Periodic retry when Offline or in retryable Error state
+    LaunchedEffect(syncState) {
+        while (true) {
+            if (syncState is SyncState.Offline || (syncState is SyncState.Error && (syncState as SyncState.Error).retryable)) {
+                delay(30_000L) // Retry every 30 seconds
+                if (dropboxClient.isAuthorized()) {
+                    println("[Main] Periodic retry: attempting sync after offline/error...")
+                    syncEngine.sync()
+                }
+            } else {
+                break // Stop looping when state is not Offline/Error
+            }
+        }
+    }
     // Initialize demo data on first launch
     LaunchedEffect(Unit) {
         val initializer = DemoDataInitializer(
@@ -393,13 +407,61 @@ fun MainScreen() {
                                 )
                             }
                         }
+                        is SyncState.Offline -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudOff,
+                                    contentDescription = "Offline",
+                                    tint = MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    "Offline Mode",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            }
+                        }
+                        is SyncState.AuthRequired -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Auth Required",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    "Auth Required - Reconnect",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
                         is SyncState.Error -> {
-                            Icon(
-                                imageVector = Icons.Default.CloudOff,
-                                contentDescription = "Sync error",
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudOff,
+                                    contentDescription = "Sync error",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                if ((syncState as SyncState.Error).retryable) {
+                                    Text(
+                                        "Sync Error (retrying...)",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
                         }
                         else -> {
                             // Show cloud icon if authenticated

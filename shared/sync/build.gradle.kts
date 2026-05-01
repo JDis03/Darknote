@@ -24,6 +24,9 @@ kotlin {
             dependencies {
                 // Dropbox SDK (JVM only) - v7.0.0+ required for SSL certificate compatibility
                 implementation("com.dropbox.core:dropbox-core-sdk:7.0.0")
+
+                // OkHttp3 - required by Dropbox SDK's OkHttp3Requestor for reliable HTTP
+                implementation("com.squareup.okhttp3:okhttp:4.12.0")
             }
         }
 

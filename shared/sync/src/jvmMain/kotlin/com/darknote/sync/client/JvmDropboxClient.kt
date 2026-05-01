@@ -5,6 +5,7 @@ import com.dropbox.core.DbxAuthFinish
 import com.dropbox.core.DbxPKCEWebAuth
 import com.dropbox.core.DbxRequestConfig
 import com.dropbox.core.DbxWebAuth
+import com.dropbox.core.http.OkHttp3Requestor
 import com.dropbox.core.oauth.DbxCredential
 import com.dropbox.core.v2.DbxClientV2
 import kotlinx.coroutines.Dispatchers
@@ -21,7 +22,9 @@ class JvmDropboxClient(
     private val appSecret: String? = null
 ) : DropboxClient {
 
-    private val config = DbxRequestConfig.newBuilder("darknote/1.0").build()
+    private val config = DbxRequestConfig.newBuilder("darknote/1.0")
+        .withAutoRetryEnabled(3)  // 3 retries with exponential backoff
+        .build()
     private val credentialsPath = File(
         System.getProperty("user.home"),
         ".config/darknote/dropbox.properties"
