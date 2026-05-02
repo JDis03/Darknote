@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import android.util.Log
 import java.util.UUID
 
 data class SnackbarData(
@@ -249,8 +250,24 @@ class SnippetListViewModel(
                     localPath = localPath,
                     syncStatus = SyncStatus.PENDING_UPLOAD
                 )
-                snippetRepository.create(snippet)
-                storageService.saveSnippetContent(snippet)
+                // Create in database
+                val result = snippetRepository.create(snippet)
+                if (result.isFailure) {
+                    _createState.value = CreateSnippetState.Error(result.exceptionOrNull()?.message ?: "Failed to create snippet")
+                    showSnackbar(SnackbarData("Failed to create snippet"))
+                    return@launch
+                }
+                
+                // Save to storage
+                val storageResult = storageService.saveSnippetContent(snippet)
+                if (storageResult.isFailure) {
+                    _createState.value = CreateSnippetState.Error(storageResult.exceptionOrNull()?.message ?: "Failed to save snippet content")
+                    showSnackbar(SnackbarData("Failed to save snippet content"))
+                    return@launch
+                }
+                
+                // Refresh the list to show new snippet
+                loadSnippets()
                 _createState.value = CreateSnippetState.Created
                 showSnackbar(SnackbarData("Snippet created"))
             } catch (e: Exception) {
@@ -262,10 +279,36 @@ class SnippetListViewModel(
 
     fun updateSnippet(snippet: Snippet) {
         viewModelScope.launch {
-            val updated = snippet.copy(modifiedAt = System.currentTimeMillis())
-            snippetRepository.update(updated)
-            storageService.saveSnippetContent(updated)
-            showSnackbar(SnackbarData("Snippet saved"))
+            try {
+                Log.d("SnippetListViewModel", "Updating snippet: ${snippet.title}")
+                val updated = snippet.copy(modifiedAt = System.currentTimeMillis())
+                
+                // Update in database
+                val result = snippetRepository.update(updated)
+                if (result.isFailure) {
+                    Log.e("SnippetListViewModel", "Database update failed: ${result.exceptionOrNull()?.message}")
+                    showSnackbar(SnackbarData("Failed to save snippet"))
+                    return@launch
+                }
+                Log.d("SnippetListViewModel", "Database update successful")
+                
+                // Save to storage
+                val storageResult = storageService.saveSnippetContent(updated)
+                if (storageResult.isFailure) {
+                    Log.e("SnippetListViewModel", "Storage update failed: ${storageResult.exceptionOrNull()?.message}")
+                    showSnackbar(SnackbarData("Failed to save snippet content"))
+                    return@launch
+                }
+                Log.d("SnippetListViewModel", "Storage update successful")
+                
+                // Refresh the list to show updated content
+                loadSnippets()
+                Log.d("SnippetListViewModel", "Snippet list refreshed")
+                showSnackbar(SnackbarData("Snippet saved"))
+            } catch (e: Exception) {
+                Log.e("SnippetListViewModel", "Failed to update snippet", e)
+                showSnackbar(SnackbarData("Failed to save snippet: ${e.message}"))
+            }
         }
     }
 
@@ -285,6 +328,21 @@ class SnippetListViewModel(
 
     fun clearSnackbar() {
         _snackbarData.value = null
+    }
+    
+    suspend fun loadSnippetWithContent(snippet: Snippet): Snippet {
+        return try {
+            val contentResult = storageService.loadSnippetContent(snippet.localPath)
+            if (contentResult.isSuccess) {
+                snippet.copy(content = contentResult.getOrDefault(""))
+            } else {
+                Log.w("SnippetListViewModel", "Failed to load content for ${snippet.title}: ${contentResult.exceptionOrNull()?.message}")
+                snippet.copy(content = "")
+            }
+        } catch (e: Exception) {
+            Log.e("SnippetListViewModel", "Error loading snippet content", e)
+            snippet.copy(content = "")
+        }
     }
 
     fun shareSnippet(snippet: Snippet, context: android.content.Context) {

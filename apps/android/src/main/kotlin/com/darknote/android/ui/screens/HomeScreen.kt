@@ -41,7 +41,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -89,6 +91,7 @@ fun HomeScreen(
     var showCreateSheet by remember { mutableStateOf(false) }
     var showDetailSnippet by remember { mutableStateOf<Snippet?>(null) }
     var editSnippet by remember { mutableStateOf<Snippet?>(null) }
+    val scope = rememberCoroutineScope()
     var contextMenuSnippet by remember { mutableStateOf<Snippet?>(null) }
     var showContextMenu by remember { mutableStateOf(false) }
 
@@ -247,7 +250,10 @@ fun HomeScreen(
                     isFavorite = snippet.isFavorite,
                     onEdit = {
                         showContextMenu = false
-                        editSnippet = snippet
+                        scope.launch {
+                            val snippetWithContent = viewModel.loadSnippetWithContent(snippet)
+                            editSnippet = snippetWithContent
+                        }
                     },
                     onCopy = {
                         showContextMenu = false
@@ -280,7 +286,12 @@ fun HomeScreen(
         SnippetDetailSheet(
             snippet = detailSnippet,
             onDismiss = { showDetailSnippet = null },
-            onEdit = { s -> editSnippet = s },
+            onEdit = { snippet ->
+                scope.launch {
+                    val snippetWithContent = viewModel.loadSnippetWithContent(snippet)
+                    editSnippet = snippetWithContent
+                }
+            },
             onCopy = { viewModel.copySnippet(it) },
             onCopyRaw = { viewModel.copyRawSnippet(it) },
             onToggleFavorite = { viewModel.toggleFavorite(it) },
