@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val storageDir = File(filesDir, "snippets").apply { mkdirs() }
-        val storageService = FileStorageService(storageDir.parentFile!!)
+        val storageService = FileStorageService(storageDir)
         val databaseFactory = DatabaseFactory(AndroidDriverFactory(this))
         val clipboardManager = AndroidClipboardManager(
             ClipboardSanitizer(ClipboardSettings.DEFAULT),
@@ -99,6 +99,7 @@ fun SnippetListScreen(viewModel: SnippetListViewModel) {
     val snippets by viewModel.filteredSnippets.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val copiedSnippetId by viewModel.copiedSnippetId.collectAsState()
+    val showFavoritesOnly by viewModel.showFavoritesOnly.collectAsState()
     
     Scaffold(
         topBar = {
@@ -107,7 +108,7 @@ fun SnippetListScreen(viewModel: SnippetListViewModel) {
                 actions = {
                     IconButton(onClick = { viewModel.toggleShowFavorites() }) {
                         Icon(
-                            imageVector = if (viewModel.showFavoritesOnly.value) 
+                            imageVector = if (showFavoritesOnly) 
                                 Icons.Default.Star else Icons.Default.StarOutline,
                             contentDescription = "Favorites"
                         )

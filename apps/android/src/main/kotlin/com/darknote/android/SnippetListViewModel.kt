@@ -50,8 +50,7 @@ class SnippetListViewModel(
     private val _copiedSnippetId = MutableStateFlow<String?>(null)
     val copiedSnippetId: StateFlow<String?> = _copiedSnippetId.asStateFlow()
 
-    private val _showFavoritesOnlyState = mutableStateOf(false)
-    val showFavoritesOnly: State<Boolean> = _showFavoritesOnlyState
+    val showFavoritesOnly: StateFlow<Boolean> = _showFavoritesOnly.asStateFlow()
 
     init {
         loadSnippets()
@@ -72,9 +71,7 @@ class SnippetListViewModel(
     }
 
     fun toggleShowFavorites() {
-        val newValue = !_showFavoritesOnlyState.value
-        _showFavoritesOnly.value = newValue
-        _showFavoritesOnlyState.value = newValue
+        _showFavoritesOnly.value = !_showFavoritesOnly.value
     }
 
     fun copySnippet(snippet: Snippet) {
