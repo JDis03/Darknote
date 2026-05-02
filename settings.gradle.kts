@@ -22,6 +22,6 @@ include(":shared:core")
 include(":shared:persistence")
 include(":shared:sync")
 
-// Apps - Desktop primero, Android después
+// Apps
 include(":apps:desktop")
-// include(":apps:android") // Descomentar cuando configuremos Android
+include(":apps:android")

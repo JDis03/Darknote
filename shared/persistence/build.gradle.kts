@@ -1,10 +1,25 @@
 plugins {
     kotlin("multiplatform")
+    id("com.android.library")
     id("app.cash.sqldelight")
 }
 
+android {
+    namespace = "com.darknote.persistence"
+    compileSdk = 34
+    defaultConfig {
+        minSdk = 24
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+}
+
 kotlin {
+    jvmToolchain(21)
     jvm()
+    androidTarget()
 
     sourceSets {
         commonMain.dependencies {
@@ -21,6 +36,11 @@ kotlin {
         jvmMain.dependencies {
             // SQLDelight JDBC Driver for JVM/Desktop
             implementation("app.cash.sqldelight:sqlite-driver:2.0.2")
+        }
+        
+        androidMain.dependencies {
+            // SQLDelight Android Driver
+            implementation("app.cash.sqldelight:android-driver:2.0.2")
         }
 
         commonTest.dependencies {
