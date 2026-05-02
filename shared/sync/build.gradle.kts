@@ -5,6 +5,7 @@ plugins {
 
 kotlin {
     jvm()
+    androidTarget()
 
     sourceSets {
         val commonMain by getting {
@@ -22,11 +23,16 @@ kotlin {
 
         val jvmMain by getting {
             dependencies {
-                // Dropbox SDK (JVM only) - v7.0.0+ required for SSL certificate compatibility
+                // Dropbox SDK (JVM/Desktop only) - v7.0.0+ required for SSL
                 implementation("com.dropbox.core:dropbox-core-sdk:7.0.0")
-
-                // OkHttp3 - required by Dropbox SDK's OkHttp3Requestor for reliable HTTP
                 implementation("com.squareup.okhttp3:okhttp:4.12.0")
+            }
+        }
+        
+        val androidMain by getting {
+            dependencies {
+                // Dropbox SDK for Android
+                implementation("com.dropbox.core:dropbox-core-sdk:7.0.0")
             }
         }
 

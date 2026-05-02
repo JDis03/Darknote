@@ -4,8 +4,8 @@ plugins {
 }
 
 kotlin {
-    // Solo JVM por ahora - Android se agregará después
     jvm()
+    androidTarget()
 
     sourceSets {
         commonMain.dependencies {

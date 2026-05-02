@@ -24,6 +24,7 @@ class JvmDropboxClient(
 
     private val config = DbxRequestConfig.newBuilder("darknote/1.0")
         .withAutoRetryEnabled(3)  // 3 retries with exponential backoff
+        .withHttpRequestor(OkHttp3Requestor(OkHttp3Requestor.defaultOkHttpClient()))
         .build()
     private val credentialsPath = File(
         System.getProperty("user.home"),

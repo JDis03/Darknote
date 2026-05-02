@@ -4,8 +4,8 @@ plugins {
 }
 
 kotlin {
-    // Solo JVM por ahora - Android se agregará después
     jvm()
+    androidTarget()
 
     sourceSets {
         commonMain.dependencies {
@@ -20,8 +20,13 @@ kotlin {
         }
         
         jvmMain.dependencies {
-            // SQLDelight JDBC Driver for JVM
+            // SQLDelight JDBC Driver for JVM/Desktop
             implementation("app.cash.sqldelight:sqlite-driver:2.0.2")
+        }
+        
+        androidMain.dependencies {
+            // SQLDelight Android Driver
+            implementation("app.cash.sqldelight:android-driver:2.0.2")
         }
 
         commonTest.dependencies {

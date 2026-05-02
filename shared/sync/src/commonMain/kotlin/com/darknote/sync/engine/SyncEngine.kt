@@ -208,8 +208,7 @@ class SyncEngine(
                 lastException = e
                 // Continue to retry
             } catch (e: com.dropbox.core.RetryException) {
-                @Suppress("DEPRECATION")
-                val backoff = e.backoffMillis ?: 1000L
+                val backoff = e.backoffMillis
                 delay(backoff)
                 lastException = e
             } catch (e: CancellationException) {
