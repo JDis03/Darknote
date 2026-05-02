@@ -9,7 +9,13 @@ import com.darknote.core.model.Snippet
 import com.darknote.core.repository.FolderRepository
 import com.darknote.core.repository.SnippetRepository
 import com.darknote.core.storage.FileStorageService
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class SnippetListViewModel(
@@ -20,31 +26,32 @@ class SnippetListViewModel(
 ) : ViewModel() {
 
     private val _allSnippets = MutableStateFlow<List<Snippet>>(emptyList())
+    private val _searchQuery = MutableStateFlow("")
+    private val _showFavoritesOnly = MutableStateFlow(false)
+
     val filteredSnippets = combine(
         _allSnippets,
         _searchQuery,
         _showFavoritesOnly
     ) { snippets, query, favoritesOnly ->
         snippets.filter { snippet ->
-            val matchesQuery = query.isBlank() || 
+            val matchesQuery = query.isBlank() ||
                 snippet.title.contains(query, ignoreCase = true) ||
                 snippet.content.contains(query, ignoreCase = true) ||
                 snippet.tags.any { it.contains(query, ignoreCase = true) }
-            
+
             val matchesFavorite = !favoritesOnly || snippet.isFavorite
-            
+
             matchesQuery && matchesFavorite
         }.sortedByDescending { it.isFavorite }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
-
-    private val _showFavoritesOnly = mutableStateOf(false)
-    val showFavoritesOnly: State<Boolean> = _showFavoritesOnly
-
     private val _copiedSnippetId = MutableStateFlow<String?>(null)
     val copiedSnippetId: StateFlow<String?> = _copiedSnippetId.asStateFlow()
+
+    private val _showFavoritesOnlyState = mutableStateOf(false)
+    val showFavoritesOnly: State<Boolean> = _showFavoritesOnlyState
 
     init {
         loadSnippets()
@@ -65,18 +72,19 @@ class SnippetListViewModel(
     }
 
     fun toggleShowFavorites() {
-        _showFavoritesOnly.value = !_showFavoritesOnly.value
+        val newValue = !_showFavoritesOnlyState.value
+        _showFavoritesOnly.value = newValue
+        _showFavoritesOnlyState.value = newValue
     }
 
     fun copySnippet(snippet: Snippet) {
         viewModelScope.launch {
-            val content = storageService.loadSnippetContent(snippet.localPath).getOrNull() 
+            val content = storageService.loadSnippetContent(snippet.localPath).getOrNull()
                 ?: snippet.content
-            
+
             clipboardManager.copy(content, sanitize = true)
             _copiedSnippetId.value = snippet.id
-            
-            // Clear copied indicator after 2 seconds
+
             kotlinx.coroutines.delay(2000)
             _copiedSnippetId.value = null
         }

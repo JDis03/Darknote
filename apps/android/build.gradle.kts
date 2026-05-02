@@ -44,7 +44,6 @@ kotlin {
 dependencies {
     implementation(project(":shared:core"))
     implementation(project(":shared:persistence"))
-    implementation(project(":shared:sync"))
 
     // Compose
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
@@ -59,6 +58,11 @@ dependencies {
 
     // Activity
     implementation("androidx.activity:activity-compose:1.9.0")
+
+    // Lifecycle
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
