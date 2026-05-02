@@ -1,6 +1,12 @@
 plugins {
     kotlin("multiplatform")
+    id("com.android.library")
     kotlin("plugin.serialization")
+}
+
+android {
+    namespace = "com.darknote.core"
+    compileSdk = 34
 }
 
 kotlin {
