@@ -6,6 +6,8 @@ import com.darknote.core.model.Snippet
 import com.darknote.core.model.SnippetMetadata
 import com.darknote.core.repository.SnippetRepository
 import com.darknote.persistence.database.DarkNoteDatabase
+import com.darknote.persistence.database.Snippet as DbSnippet
+import com.darknote.persistence.database.Snippet_metadata as DbSnippetMetadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -148,7 +150,7 @@ class SnippetRepositoryImpl(
     }
 
     // Extension functions for mapping
-    private fun com.darknote.persistence.Snippet.toSnippet(): Snippet {
+    private fun DbSnippet.toSnippet(): Snippet {
         return Snippet(
             id = id,
             title = title,
@@ -165,7 +167,7 @@ class SnippetRepositoryImpl(
         )
     }
 
-    private fun com.darknote.persistence.Snippet_metadata.toMetadata(): SnippetMetadata {
+    private fun DbSnippetMetadata.toMetadata(): SnippetMetadata {
         return SnippetMetadata(
             snippetId = snippet_id,
             usageCount = usage_count?.toInt() ?: 0,

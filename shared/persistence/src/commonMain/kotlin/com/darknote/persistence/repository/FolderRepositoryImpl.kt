@@ -5,6 +5,7 @@ import app.cash.sqldelight.coroutines.mapToList
 import com.darknote.core.model.Folder
 import com.darknote.core.repository.FolderRepository
 import com.darknote.persistence.database.DarkNoteDatabase
+import com.darknote.persistence.database.Folder as DbFolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -121,7 +122,7 @@ class FolderRepositoryImpl(
         }
     }
 
-    private fun com.darknote.persistence.Folder.toFolder(): Folder {
+    private fun DbFolder.toFolder(): Folder {
         return Folder(
             id = id,
             name = name,
