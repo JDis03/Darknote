@@ -18,6 +18,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.darknote.core.clipboard.ClipboardSanitizer
+import com.darknote.core.data.DemoDataInitializer
 import com.darknote.core.model.ClipboardSettings
 import com.darknote.core.model.Snippet
 import com.darknote.core.storage.FileStorageService
@@ -45,6 +46,16 @@ class MainActivity : ComponentActivity() {
             storageService = storageService,
             clipboardManager = clipboardManager
         )
+        
+        // Initialize demo data if needed
+        lifecycleScope.launch {
+            val demoDataInitializer = DemoDataInitializer(
+                folderRepository = databaseFactory.folderRepository,
+                snippetRepository = databaseFactory.snippetRepository,
+                fileStorageService = storageService
+            )
+            demoDataInitializer.initializeIfEmpty()
+        }
         
         setContent {
             MaterialTheme {

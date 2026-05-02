@@ -19,7 +19,7 @@ import com.darknote.desktop.clipboard.DesktopClipboardManager
 import com.darknote.core.clipboard.ClipboardSanitizer
 import com.darknote.core.model.ClipboardSettings
 import com.darknote.core.storage.FileStorageService
-import com.darknote.desktop.data.DemoDataInitializer
+import com.darknote.core.data.DemoDataInitializer
 import com.darknote.desktop.ui.tree.*
 import com.darknote.desktop.ui.dialogs.RenameDialog
 import com.darknote.desktop.ui.screens.SettingsScreen

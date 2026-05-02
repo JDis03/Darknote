@@ -1,4 +1,4 @@
-package com.darknote.desktop.data
+package com.darknote.core.data
 
 import com.darknote.core.model.Folder
 import com.darknote.core.model.Snippet
