@@ -7,10 +7,12 @@
         android:allowBackup="true"
         android:label="DarkNote"
         android:supportsRtl="true"
-        android:theme="@style/Theme.DarkNote">
+        android:theme="@style/Theme.DarkNote"
+        android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

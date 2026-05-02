@@ -1,0 +1,53 @@
+package com.darknote.android.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+val Purple10 = Color(0xFF200056)
+val Purple20 = Color(0xFF34006E)
+val Purple30 = Color(0xFF4C00A6)
+val Purple40 = Color(0xFF6B21A8)
+val Purple80 = Color(0xFFD8B4FE)
+val Purple90 = Color(0xFFE9D5FF)
+val Purple100 = Color(0xFFF3E8FF)
+
+val DarkTeal10 = Color(0xFF002021)
+val DarkTeal20 = Color(0xFF003739)
+val DarkTeal30 = Color(0xFF004F53)
+val DarkTeal40 = Color(0xFF00696E)
+val DarkTeal80 = Color(0xFF4DDADE)
+val DarkTeal90 = Color(0xFF70F5F8)
+val DarkTeal100 = Color(0xFFAEFBFF)
+
+val LightGreen10 = Color(0xFF05200A)
+val LightGreen20 = Color(0xFF0C390F)
+val LightGreen30 = Color(0xFF135216)
+val LightGreen40 = Color(0xFF1A6E20)
+val LightGreen80 = Color(0xFF84D88A)
+val LightGreen90 = Color(0xFFA0F4A5)
+val LightGreen100 = Color(0xFFC6FCC9)
+
+val Red10 = Color(0xFF410002)
+val Red20 = Color(0xFF690005)
+val Red30 = Color(0xFF93000A)
+val Red40 = Color(0xFFBA1A1A)
+val Red80 = Color(0xFFFFB4AB)
+val Red90 = Color(0xFFFFDAD6)
+val Red100 = Color(0xFFFFF8F7)
+
+val DarkBackground = Color(0xFF1A1C1E)
+val DarkOnBackground = Color(0xFFE2E0E6)
+val DarkSurface = Color(0xFF1E2022)
+val DarkOnSurface = Color(0xFFE2E0E6)
+val DarkSurfaceVariant = Color(0xFF2C2F33)
+val DarkOnSurfaceVariant = Color(0xFFC7C5D0)
+val DarkOutline = Color(0xFF918F99)
+val DarkOutlineVariant = Color(0xFF46464F)
+
+val LightBackground = Color(0xFFFFFBFE)
+val LightOnBackground = Color(0xFF1C1B1F)
+val LightSurface = Color(0xFFFFFBFE)
+val LightOnSurface = Color(0xFF1C1B1F)
+val LightSurfaceVariant = Color(0xFFE7E0EC)
+val LightOnSurfaceVariant = Color(0xFF49454F)
+val LightOutline = Color(0xFF79747E)
+val LightOutlineVariant = Color(0xFFCAC4D0)
