@@ -7,7 +7,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.TextSnippet
+import androidx.compose.material.icons.automirrored.filled.TextSnippet
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -18,7 +18,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 
 enum class FabItem(val icon: ImageVector, val label: String) {
-    SNIPPET(Icons.Default.TextSnippet, "Snippet"),
+    SNIPPET(Icons.AutoMirrored.Filled.TextSnippet, "Snippet"),
     TEXT(Icons.Default.Description, "Text"),
     CODE(Icons.Default.Code, "Code")
 }
