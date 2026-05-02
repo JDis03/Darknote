@@ -22,7 +22,7 @@ import com.darknote.core.model.ClipboardSettings
 import com.darknote.core.model.Snippet
 import com.darknote.core.storage.FileStorageService
 import com.darknote.persistence.database.DatabaseFactory
-import com.darknote.persistence.database.DriverFactory
+import com.darknote.persistence.database.AndroidDriverFactory
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
         
         val storageDir = File(filesDir, "snippets").apply { mkdirs() }
         val storageService = FileStorageService(storageDir.parentFile!!)
-        val databaseFactory = DatabaseFactory(DriverFactory(this))
+        val databaseFactory = DatabaseFactory(AndroidDriverFactory(this))
         val clipboardManager = AndroidClipboardManager(
             ClipboardSanitizer(ClipboardSettings.DEFAULT),
             this

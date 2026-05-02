@@ -63,7 +63,7 @@ fun MainScreen() {
     // Initialize database and repositories
     val databaseFactory = remember {
         com.darknote.persistence.database.DatabaseFactory(
-            com.darknote.persistence.database.DriverFactory()
+            com.darknote.persistence.database.JvmDriverFactory()
         )
     }
     

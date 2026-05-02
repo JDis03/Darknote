@@ -70,10 +70,10 @@ class SnippetListViewModel(
 
     fun copySnippet(snippet: Snippet) {
         viewModelScope.launch {
-            val content = storageService.loadSnippetContent(snippet.id).getOrNull() 
+            val content = storageService.loadSnippetContent(snippet.localPath).getOrNull() 
                 ?: snippet.content
             
-            clipboardManager.copyToClipboard(content)
+            clipboardManager.copy(content, sanitize = true)
             _copiedSnippetId.value = snippet.id
             
             // Clear copied indicator after 2 seconds
