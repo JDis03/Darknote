@@ -1,265 +1,461 @@
 package com.darknote.sync.engine
 
 import com.darknote.core.model.Snippet
+import com.darknote.core.model.SyncMetadata
 import com.darknote.core.model.SyncStatus
 import com.darknote.core.repository.SnippetRepository
+import com.darknote.core.repository.FolderRepository
+import com.darknote.core.repository.SyncMetadataRepository
+import com.darknote.core.storage.FileStorageService
 import com.darknote.sync.client.DropboxClient
 import com.darknote.sync.client.RemoteFile
 import com.darknote.sync.client.RemoteMetadata
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
-import java.io.File
-import java.security.MessageDigest
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
- * Sync engine that coordinates local and remote changes.
+ * Sync engine inspired by Joplin's synchronization architecture.
+ * Handles bidirectional sync with conflict resolution.
  */
 class SyncEngine(
-    private val snippetRepository: SnippetRepository,
     private val dropboxClient: DropboxClient,
-    private val snippetsDir: File = File(System.getProperty("user.home"), ".config/darknote/snippets"),
-    private val coroutineScope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val snippetRepository: SnippetRepository,
+    private val folderRepository: FolderRepository,
+    private val syncMetadataRepository: SyncMetadataRepository,
+    private val storageService: FileStorageService
 ) {
-    private val _syncState = MutableStateFlow<SyncState>(SyncState.Idle)
-    val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
-
-    private val _syncProgress = MutableStateFlow<SyncProgress>(SyncProgress())
-    val syncProgress: StateFlow<SyncProgress> = _syncProgress.asStateFlow()
-
-    init {
-        snippetsDir.mkdirs()
-    }
-
+    
+    private val _state = MutableStateFlow<SyncState>(SyncState.Idle)
+    val state: StateFlow<SyncState> = _state.asStateFlow()
+    
+    private val _progress = MutableStateFlow<SyncProgress?>(null)
+    val progress: StateFlow<SyncProgress?> = _progress.asStateFlow()
+    
+    private val _logs = MutableStateFlow<List<SyncLog>>(emptyList())
+    val logs: StateFlow<List<SyncLog>> = _logs.asStateFlow()
+    
     /**
-     * Perform bidirectional sync with automatic retry for transient errors.
+     * Perform complete bidirectional synchronization.
      */
-    suspend fun sync(): Result<SyncResult> = withRetry {
-        if (!dropboxClient.isAuthorized()) {
-            _syncState.value = SyncState.AuthRequired
-            return@withRetry Result.failure(IllegalStateException("Dropbox not authorized"))
-        }
-
-        _syncState.value = SyncState.Syncing
-        _syncProgress.value = SyncProgress(total = 0, current = 0)
-
-        // Get remote files - throw underlying exception so withRetry can handle it by type
-        val remoteFilesResult = dropboxClient.listFiles("")
-        if (remoteFilesResult.isFailure) {
-            throw remoteFilesResult.exceptionOrNull()!!
-        }
-
-        val remoteFiles = remoteFilesResult.getOrThrow()
-
-        // Get local snippets
-        val localSnippets = snippetRepository.getAll().first()
-
-        // Calculate changes
-        val toUpload = mutableListOf<Snippet>()
-        val toDownload = mutableListOf<RemoteFile>()
-        val conflicts = mutableListOf<Conflict>()
-
-        // Check local changes
-        localSnippets.forEach { snippet ->
-            val remoteFile = remoteFiles.find { it.name == File(snippet.localPath).name }
-
-            when {
-                remoteFile == null -> {
-                    // New local file - upload
-                    toUpload.add(snippet)
-                }
-                snippet.syncStatus == SyncStatus.PENDING_UPLOAD -> {
-                    // Modified locally - check for conflict
-                    val localHash = calculateFileHash(File(snippetsDir, snippet.localPath))
-                    val metadata = dropboxClient.getMetadata(remoteFile.path).getOrNull()
-
-                    if (metadata != null && metadata.revision != snippet.syncStatus.name) {
-                        conflicts.add(Conflict(snippet, remoteFile))
-                    } else {
-                        toUpload.add(snippet)
-                    }
-                }
-                else -> {
-                    // Check if remote is newer
-                    val localFile = File(snippetsDir, snippet.localPath)
-                    if (remoteFile.modifiedTime > snippet.modifiedAt) {
-                        toDownload.add(remoteFile)
-                    }
-                }
+    suspend fun sync(): Result<Unit> = withContext(Dispatchers.Default) {
+        try {
+            addLog("Starting synchronization...", SyncLogType.INFO)
+            _state.value = SyncState.Syncing
+            _progress.value = SyncProgress(0, 0, "Initializing...")
+            
+            // Step 1: Check authentication
+            if (!dropboxClient.isAuthorized()) {
+                throw SyncException("Not authenticated with Dropbox")
             }
-        }
-
-        // Check remote files not in local
-        remoteFiles.forEach { remoteFile ->
-            if (!localSnippets.any { File(it.localPath).name == remoteFile.name }) {
-                toDownload.add(remoteFile)
-            }
-        }
-
-        // Execute sync
-        val total = toUpload.size + toDownload.size + conflicts.size
-        _syncProgress.value = SyncProgress(total = total, current = 0)
-
-        var uploaded = 0
-        var downloaded = 0
-        var resolved = 0
-
-        // Upload files - throw on failure so withRetry can handle transient errors
-        toUpload.forEach { snippet ->
-            val localFile = File(snippetsDir, snippet.localPath)
-            if (localFile.exists()) {
-                val result = dropboxClient.uploadFile(
-                    localFile.absolutePath,
-                    "/${localFile.name}"
-                )
-
-                if (result.isSuccess) {
-                    snippetRepository.update(snippet.copy(syncStatus = SyncStatus.SYNCED))
-                    snippetRepository.updateMetadata(
-                        snippet.id,
-                        result.getOrThrow(),
-                        calculateFileHash(localFile)
-                    )
-                    uploaded++
-                } else {
-                    // Re-throw so withRetry can handle by exception type
-                    throw result.exceptionOrNull()!!
-                }
-            }
-            _syncProgress.value = SyncProgress(total = total, current = uploaded + downloaded + resolved)
-        }
-
-        // Download files - throw on failure so withRetry can handle transient errors
-        toDownload.forEach { remoteFile ->
-            val localPath = File(snippetsDir, remoteFile.name)
-            val result = dropboxClient.downloadFile(remoteFile.path, localPath.absolutePath)
-
-            if (result.isSuccess) {
-                // Create snippet record if new
-                val existing = localSnippets.find { File(it.localPath).name == remoteFile.name }
-                if (existing == null) {
-                    // Create new snippet from file
-                    val content = localPath.readText()
-                    val title = remoteFile.name.substringBeforeLast(".", remoteFile.name)
-                    val snippet = Snippet(
-                        id = generateId(),
-                        title = title,
-                        content = content,
-                        createdAt = remoteFile.modifiedTime,
-                        modifiedAt = remoteFile.modifiedTime,
-                        syncStatus = SyncStatus.SYNCED,
-                        localPath = localPath.absolutePath
-                    )
-                    snippetRepository.create(snippet)
-                } else {
-                    snippetRepository.update(existing.copy(syncStatus = SyncStatus.SYNCED))
-                }
-                downloaded++
-            } else {
-                // Re-throw so withRetry can handle by exception type
-                throw result.exceptionOrNull()!!
-            }
-            _syncProgress.value = SyncProgress(total = total, current = uploaded + downloaded + resolved)
-        }
-
-        _syncState.value = SyncState.Idle
-        Result.success(SyncResult(uploaded, downloaded, conflicts.size))
-    }
-
-    /**
-     * Start automatic sync timer.
-     */
-    fun startAutoSync(intervalMinutes: Int = 5) {
-        coroutineScope.launch {
-            while (isActive) {
-                sync()
-                delay(intervalMinutes * 60 * 1000L)
-            }
-        }
-    }
-
-    /**
-     * Stop automatic sync.
-     */
-    fun stopAutoSync() {
-        coroutineScope.cancel()
-    }
-
-    /**
-     * Retry wrapper with exponential backoff for transient Dropbox errors.
-     * - InvalidAccessTokenException → sets AuthRequired, does NOT retry
-     * - NetworkIOException → sets Offline, continues retrying
-     * - RetryException → respects backoff hint, continues retrying
-     * - Other exceptions → sets Error state, continues retrying
-     */
-    private suspend fun <T> withRetry(
-        maxAttempts: Int = 3,
-        block: suspend () -> T
-    ): T {
-        var lastException: Exception? = null
-        repeat(maxAttempts) { attempt ->
-            if (attempt > 0) delay(1000L * attempt) // exponential backoff
+            addLog("Authentication verified", SyncLogType.SUCCESS)
+            
+            // Step 2: Acquire sync lock to prevent concurrent syncs
+            acquireSyncLock()
+            
             try {
-                return block()
-            } catch (e: com.dropbox.core.InvalidAccessTokenException) {
-                _syncState.value = SyncState.AuthRequired
-                throw e // Don't retry auth failures
-            } catch (e: com.dropbox.core.NetworkIOException) {
-                _syncState.value = SyncState.Offline
-                lastException = e
-                // Continue to retry
-            } catch (e: com.dropbox.core.RetryException) {
-                val backoff = e.backoffMillis
-                delay(backoff)
-                lastException = e
-            } catch (e: CancellationException) {
-                throw e // Don't catch coroutine cancellation
-            } catch (e: Exception) {
-                _syncState.value = SyncState.Error(e.message ?: "Unknown error", retryable = true)
-                lastException = e
+                // Step 3: Detect changes
+                addLog("Detecting local and remote changes...", SyncLogType.INFO)
+                _progress.value = SyncProgress(1, 5, "Detecting changes...")
+                
+                val localChanges = detectLocalChanges()
+                val remoteChanges = detectRemoteChanges()
+                
+                addLog("Found ${localChanges.size} local changes, ${remoteChanges.size} remote changes", SyncLogType.INFO)
+                
+                // Step 4: Resolve conflicts
+                _progress.value = SyncProgress(2, 5, "Resolving conflicts...")
+                val resolvedChanges = resolveConflicts(localChanges, remoteChanges)
+                
+                // Step 5: Upload local changes
+                _progress.value = SyncProgress(3, 5, "Uploading changes...")
+                uploadChanges(resolvedChanges.toUpload)
+                
+                // Step 6: Download remote changes  
+                _progress.value = SyncProgress(4, 5, "Downloading changes...")
+                downloadChanges(resolvedChanges.toDownload)
+                
+                // Step 7: Complete
+                _progress.value = SyncProgress(5, 5, "Complete")
+                _state.value = SyncState.Synced
+                addLog("Synchronization completed successfully", SyncLogType.SUCCESS)
+                
+                Result.success(Unit)
+            } finally {
+                releaseSyncLock()
+            }
+            
+        } catch (e: Exception) {
+            _state.value = SyncState.Error(e.message ?: "Unknown sync error")
+            addLog("Sync failed: ${e.message}", SyncLogType.ERROR)
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * Detect changes in local snippets since last sync.
+     */
+    private suspend fun detectLocalChanges(): List<LocalChange> {
+        val allSnippets = snippetRepository.getAllCached()
+        val changes = mutableListOf<LocalChange>()
+        
+        for (snippet in allSnippets) {
+            val syncMetadata = syncMetadataRepository.getBySnippetId(snippet.id)
+            
+            when {
+                syncMetadata == null -> {
+                    // New snippet - needs to be uploaded
+                    changes.add(LocalChange.Created(snippet))
+                    addLog("Local create: ${snippet.title}", SyncLogType.INFO)
+                }
+                snippet.modifiedAt > syncMetadata.lastSyncTime -> {
+                    // Modified snippet - needs to be uploaded
+                    changes.add(LocalChange.Updated(snippet))
+                    addLog("Local update: ${snippet.title}", SyncLogType.INFO)
+                }
             }
         }
-        throw lastException ?: Exception("Max retries exceeded")
+        
+        return changes
     }
-
-    private fun calculateFileHash(file: File): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        digest.update(file.readBytes())
-        return digest.digest().joinToString("") { "%02x".format(it) }
+    
+    /**
+     * Detect changes in remote files since last sync.
+     */
+    private suspend fun detectRemoteChanges(): List<RemoteChange> {
+        val result = dropboxClient.listFiles("/")
+        if (result.isFailure) {
+            throw SyncException("Failed to list remote files: ${result.exceptionOrNull()?.message}")
+        }
+        
+        val remoteFiles = result.getOrThrow()
+        val changes = mutableListOf<RemoteChange>()
+        
+        for (remoteFile in remoteFiles) {
+            if (!remoteFile.name.endsWith(".txt")) continue // Only sync .txt files
+            
+            val snippetId = extractSnippetIdFromPath(remoteFile.path)
+            val localSnippet = snippetRepository.getByIdCached(snippetId)
+            val syncMetadata = syncMetadataRepository.getBySnippetId(snippetId)
+            
+            when {
+                localSnippet == null -> {
+                    // New remote file - needs to be downloaded
+                    changes.add(RemoteChange.Created(remoteFile))
+                    addLog("Remote create: ${remoteFile.name}", SyncLogType.INFO)
+                }
+                syncMetadata?.remoteRevision != extractRevisionFromFile(remoteFile) -> {
+                    // Modified remote file - needs to be downloaded
+                    changes.add(RemoteChange.Updated(remoteFile, localSnippet))
+                    addLog("Remote update: ${remoteFile.name}", SyncLogType.INFO)
+                }
+            }
+        }
+        
+        return changes
     }
-
-    private fun generateId(): String = java.util.UUID.randomUUID().toString()
+    
+    /**
+     * Resolve conflicts between local and remote changes.
+     * Strategy: Last modified wins + create conflict backup.
+     */
+    private suspend fun resolveConflicts(
+        localChanges: List<LocalChange>,
+        remoteChanges: List<RemoteChange>
+    ): ConflictResolution {
+        val toUpload = mutableListOf<LocalChange>()
+        val toDownload = mutableListOf<RemoteChange>()
+        val conflicts = mutableListOf<ConflictInfo>()
+        
+        // Create maps for efficient lookup
+        val localBySnippetId = localChanges.associateBy { it.snippet.id }
+        val remoteBySnippetId = remoteChanges.associateBy { extractSnippetIdFromPath(it.file.path) }
+        
+        // Process all snippet IDs
+        val allSnippetIds = (localBySnippetId.keys + remoteBySnippetId.keys).distinct()
+        
+        for (snippetId in allSnippetIds) {
+            val local = localBySnippetId[snippetId]
+            val remote = remoteBySnippetId[snippetId]
+            
+            when {
+                local != null && remote != null -> {
+                    // Conflict: both local and remote have changes
+                    val localTime = local.snippet.modifiedAt
+                    val remoteTime = remote.file.modifiedTime
+                    
+                    if (localTime > remoteTime) {
+                        // Local wins - upload local
+                        toUpload.add(local)
+                        // Create conflict backup of remote
+                        conflicts.add(ConflictInfo(snippetId, "local_wins", "Local version is newer"))
+                        addLog("Conflict resolved: Local wins for ${local.snippet.title}", SyncLogType.WARNING)
+                    } else {
+                        // Remote wins - download remote
+                        toDownload.add(remote)
+                        // Create conflict backup of local
+                        conflicts.add(ConflictInfo(snippetId, "remote_wins", "Remote version is newer"))
+                        addLog("Conflict resolved: Remote wins for ${local.snippet.title}", SyncLogType.WARNING)
+                    }
+                }
+                local != null -> {
+                    // Only local change - upload
+                    toUpload.add(local)
+                }
+                remote != null -> {
+                    // Only remote change - download
+                    toDownload.add(remote)
+                }
+            }
+        }
+        
+        addLog("Resolved ${conflicts.size} conflicts", SyncLogType.INFO)
+        
+        return ConflictResolution(toUpload, toDownload, conflicts)
+    }
+    
+    /**
+     * Upload local changes to remote.
+     */
+    private suspend fun uploadChanges(changes: List<LocalChange>) {
+        for ((index, change) in changes.withIndex()) {
+            try {
+                val snippet = change.snippet
+                addLog("Uploading ${snippet.title}...", SyncLogType.INFO)
+                
+                // Generate remote path
+                val remotePath = generateRemotePath(snippet)
+                
+                // Save content to temp file first
+                val tempFile = createTempFile(snippet)
+                
+                // Upload to Dropbox
+                val uploadResult = dropboxClient.uploadFile(tempFile.absolutePath, remotePath)
+                if (uploadResult.isFailure) {
+                    throw SyncException("Upload failed for ${snippet.title}: ${uploadResult.exceptionOrNull()?.message}")
+                }
+                
+                val revision = uploadResult.getOrThrow()
+                
+                // Update sync metadata
+                syncMetadataRepository.updateRemoteRevision(snippet.id, revision)
+                syncMetadataRepository.updateLastSyncTime(snippet.id)
+                
+                // Clean up temp file
+                tempFile.delete()
+                
+                addLog("Uploaded ${snippet.title} successfully", SyncLogType.SUCCESS)
+                
+            } catch (e: Exception) {
+                addLog("Failed to upload ${change.snippet.title}: ${e.message}", SyncLogType.ERROR)
+                throw e
+            }
+        }
+    }
+    
+    /**
+     * Download remote changes to local.
+     */
+    private suspend fun downloadChanges(changes: List<RemoteChange>) {
+        for (change in changes) {
+            try {
+                val remoteFile = change.file
+                addLog("Downloading ${remoteFile.name}...", SyncLogType.INFO)
+                
+                // Create temp file for download
+                val tempFile = kotlin.io.path.createTempFile().toFile()
+                
+                // Download from Dropbox
+                val downloadResult = dropboxClient.downloadFile(remoteFile.path, tempFile.absolutePath)
+                if (downloadResult.isFailure) {
+                    throw SyncException("Download failed for ${remoteFile.name}: ${downloadResult.exceptionOrNull()?.message}")
+                }
+                
+                // Read content
+                val content = tempFile.readText()
+                
+                when (change) {
+                    is RemoteChange.Created -> {
+                        // Create new snippet from remote file
+                        createSnippetFromRemote(remoteFile, content)
+                    }
+                    is RemoteChange.Updated -> {
+                        // Update existing snippet
+                        updateSnippetFromRemote(change.localSnippet, content, remoteFile.modifiedTime)
+                    }
+                }
+                
+                // Update sync metadata
+                val snippetId = extractSnippetIdFromPath(remoteFile.path)
+                syncMetadataRepository.updateRemoteRevision(snippetId, extractRevisionFromFile(remoteFile))
+                syncMetadataRepository.updateLastSyncTime(snippetId)
+                
+                // Clean up temp file
+                tempFile.delete()
+                
+                addLog("Downloaded ${remoteFile.name} successfully", SyncLogType.SUCCESS)
+                
+            } catch (e: Exception) {
+                addLog("Failed to download ${change.file.name}: ${e.message}", SyncLogType.ERROR)
+                throw e
+            }
+        }
+    }
+    
+    // Helper methods
+    private fun addLog(message: String, type: SyncLogType) {
+        val log = SyncLog(
+            timestamp = System.currentTimeMillis(),
+            message = message,
+            type = type
+        )
+        _logs.value = (_logs.value + log).takeLast(100) // Keep last 100 logs
+    }
+    
+    private suspend fun acquireSyncLock() {
+        // Simple lock mechanism - create a lock file on Dropbox
+        addLog("Acquiring sync lock...", SyncLogType.INFO)
+        // TODO: Implement lock file creation
+    }
+    
+    private suspend fun releaseSyncLock() {
+        addLog("Releasing sync lock...", SyncLogType.INFO)
+        // TODO: Implement lock file deletion
+    }
+    
+    // Helper methods
+    private fun extractSnippetIdFromPath(path: String): String = 
+        path.substringBeforeLast(".").substringAfterLast("/")
+        
+    private fun extractRevisionFromFile(file: RemoteFile): String = 
+        "rev_${file.modifiedTime}"
+        
+    private fun generateRemotePath(snippet: Snippet): String = 
+        "/snippets/${snippet.id}.txt"
+        
+    private suspend fun createTempFile(snippet: Snippet): java.io.File {
+        val tempFile = kotlin.io.path.createTempFile().toFile()
+        tempFile.writeText(snippet.content)
+        return tempFile
+    }
+    
+    private suspend fun createSnippetFromRemote(remoteFile: RemoteFile, content: String) {
+        val snippetId = extractSnippetIdFromPath(remoteFile.path)
+        val title = remoteFile.name.substringBeforeLast(".txt")
+        
+        val snippet = Snippet(
+            id = snippetId,
+            title = title,
+            content = content,
+            folderId = null,
+            tags = emptyList(),
+            language = null,
+            isFavorite = false,
+            createdAt = remoteFile.modifiedTime,
+            modifiedAt = remoteFile.modifiedTime,
+            syncStatus = com.darknote.core.model.SyncStatus.SYNCED,
+            localPath = storageService.generateSafePath(title),
+            docPath = null
+        )
+        
+        snippetRepository.create(snippet)
+        storageService.saveSnippetContent(snippet)
+        
+        // Create sync metadata
+        val syncMetadata = SyncMetadata(
+            snippetId = snippetId,
+            remoteRevision = extractRevisionFromFile(remoteFile),
+            lastSyncTime = System.currentTimeMillis(),
+            syncStatus = SyncStatus.SYNCED
+        )
+        syncMetadataRepository.save(syncMetadata)
+    }
+    
+    private suspend fun updateSnippetFromRemote(snippet: Snippet, content: String, modifiedTime: Long) {
+        val updatedSnippet = snippet.copy(
+            content = content,
+            modifiedAt = modifiedTime,
+            syncStatus = com.darknote.core.model.SyncStatus.SYNCED
+        )
+        
+        snippetRepository.update(updatedSnippet)
+        storageService.saveSnippetContent(updatedSnippet)
+    }
 }
 
-// Data classes
+/**
+ * Sync states
+ */
 sealed class SyncState {
     object Idle : SyncState()
     object Syncing : SyncState()
-    object Offline : SyncState()        // No internet, working locally
-    object AuthRequired : SyncState()   // Token invalid, needs re-auth
-    data class Error(val message: String, val retryable: Boolean) : SyncState()
+    object Synced : SyncState()
+    data class Error(val message: String) : SyncState()
 }
 
+/**
+ * Sync progress tracking
+ */
 data class SyncProgress(
-    val total: Int = 0,
-    val current: Int = 0
-) {
-    val percentage: Int = if (total > 0) (current * 100 / total) else 0
-}
-
-data class SyncResult(
-    val uploaded: Int,
-    val downloaded: Int,
-    val conflicts: Int
+    val current: Int,
+    val total: Int,
+    val message: String
 )
 
-data class Conflict(
-    val localSnippet: Snippet,
-    val remoteFile: RemoteFile
+/**
+ * Sync log entry
+ */
+data class SyncLog(
+    val timestamp: Long,
+    val message: String,
+    val type: SyncLogType
 )
 
-// Utility functions for file operations
-private fun String.getNameWithoutExtension(): String = substringBeforeLast(".")
-
-private suspend fun SnippetRepository.updateMetadata(snippetId: String, revision: String, hash: String) {
-    // Implementation would update metadata
+enum class SyncLogType {
+    INFO, SUCCESS, WARNING, ERROR
 }
+
+/**
+ * Local changes to sync
+ */
+sealed class LocalChange {
+    abstract val snippet: Snippet
+    
+    data class Created(override val snippet: Snippet) : LocalChange()
+    data class Updated(override val snippet: Snippet) : LocalChange()
+}
+
+/**
+ * Remote changes to sync
+ */
+sealed class RemoteChange {
+    abstract val file: RemoteFile
+    
+    data class Created(override val file: RemoteFile) : RemoteChange()
+    data class Updated(override val file: RemoteFile, val localSnippet: Snippet) : RemoteChange()
+}
+
+/**
+ * Conflict resolution result
+ */
+data class ConflictResolution(
+    val toUpload: List<LocalChange>,
+    val toDownload: List<RemoteChange>,
+    val conflicts: List<ConflictInfo>
+)
+
+/**
+ * Conflict information
+ */
+data class ConflictInfo(
+    val snippetId: String,
+    val resolution: String,
+    val reason: String
+)
+
+/**
+ * Sync-related exceptions
+ */
+class SyncException(message: String, cause: Throwable? = null) : Exception(message, cause)

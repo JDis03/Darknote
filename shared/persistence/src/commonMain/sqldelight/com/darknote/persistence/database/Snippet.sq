@@ -164,3 +164,25 @@ SET auto_sanitize = ?,
     trim_whitespace = ?,
     remove_zero_width = ?
 WHERE id = 1;
+
+-- Sync metadata queries
+selectAllSnippetMetadata:
+SELECT * FROM snippet_metadata;
+
+selectSnippetMetadata:
+SELECT * FROM snippet_metadata 
+WHERE snippet_id = ?;
+
+deleteSnippetMetadata:
+DELETE FROM snippet_metadata
+WHERE snippet_id = ?;
+
+updateSnippetMetadataDropboxRev:
+UPDATE snippet_metadata
+SET dropbox_rev = ?
+WHERE snippet_id = ?;
+
+updateSnippetMetadataLastSync:
+UPDATE snippet_metadata
+SET last_sync_at = ?
+WHERE snippet_id = ?;

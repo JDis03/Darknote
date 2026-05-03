@@ -63,4 +63,14 @@ interface SnippetRepository {
      * Increment usage count for a snippet.
      */
     suspend fun incrementUsageCount(snippetId: String): Result<Unit>
+    
+    /**
+     * Get all snippets without reactive flow (for sync operations).
+     */
+    suspend fun getAllCached(): List<Snippet>
+    
+    /**
+     * Get snippet by ID without reactive flow (for sync operations).
+     */
+    suspend fun getByIdCached(id: String): Snippet?
 }
