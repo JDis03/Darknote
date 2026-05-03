@@ -8,12 +8,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.darknote.android.SnippetListViewModel
+import com.darknote.android.viewmodel.AuthViewModel
 import com.darknote.android.ui.screens.HomeScreen
 import com.darknote.android.ui.screens.SettingsScreen
 
 @Composable
 fun DarkNoteNavHost(
     viewModel: SnippetListViewModel,
+    authViewModel: AuthViewModel,
     navController: NavHostController = rememberNavController()
 ) {
     NavHost(
@@ -31,7 +33,8 @@ fun DarkNoteNavHost(
 
         composable(Screen.Settings.route) {
             SettingsScreen(
-                onNavigateBack = {
+                authViewModel = authViewModel,
+                onBackClick = {
                     navController.popBackStack()
                 }
             )

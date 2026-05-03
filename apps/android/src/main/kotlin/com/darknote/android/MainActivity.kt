@@ -18,6 +18,8 @@ import com.darknote.core.model.ClipboardSettings
 import com.darknote.core.storage.FileStorageService
 import com.darknote.persistence.database.AndroidDriverFactory
 import com.darknote.persistence.database.DatabaseFactory
+import com.darknote.sync.client.DropboxClientFactory
+import com.darknote.android.viewmodel.AuthViewModel
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -25,6 +27,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Initialize Dropbox client factory (uses same app key as Desktop)
+        DropboxClientFactory.initialize(this)
 
         val storageDir = File(filesDir, "snippets").apply { mkdirs() }
         val storageService = FileStorageService(storageDir)
@@ -39,6 +44,10 @@ class MainActivity : ComponentActivity() {
             folderRepository = databaseFactory.folderRepository,
             storageService = storageService,
             clipboardManager = clipboardManager
+        )
+
+        val authViewModel = AuthViewModel(
+            dropboxClient = DropboxClientFactory.create()
         )
 
         lifecycleScope.launch {
@@ -56,7 +65,10 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = androidx.compose.material3.MaterialTheme.colorScheme.background
                 ) {
-                    DarkNoteNavHost(viewModel = viewModel)
+                    DarkNoteNavHost(
+                        viewModel = viewModel,
+                        authViewModel = authViewModel
+                    )
                 }
             }
         }

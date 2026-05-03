@@ -48,6 +48,7 @@ kotlin {
 dependencies {
     implementation(project(":shared:core"))
     implementation(project(":shared:persistence"))
+    implementation(project(":shared:sync"))
 
     // Compose BOM
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
@@ -76,6 +77,9 @@ dependencies {
 
     // Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.0")
+    
+    // Browser for OAuth
+    implementation("androidx.browser:browser:1.8.0")
 
     // Tests
     testImplementation(kotlin("test"))

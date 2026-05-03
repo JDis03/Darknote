@@ -1,249 +1,297 @@
 package com.darknote.android.ui.screens
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material3.Card
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Login
+import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.darknote.android.viewmodel.AuthState
+import com.darknote.android.viewmodel.AuthViewModel
+import com.darknote.android.viewmodel.LogType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    onNavigateBack: () -> Unit,
+    authViewModel: AuthViewModel,
+    onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
-    var isDarkTheme by remember { mutableStateOf(false) }
-    var isDynamicColor by remember { mutableStateOf(true) }
+    val context = LocalContext.current
+    val authState by authViewModel.authState
+    val syncLogs by authViewModel.syncLogs
+    val listState = rememberLazyListState()
+
+    // Auto-scroll to bottom when new logs are added
+    LaunchedEffect(syncLogs.size) {
+        if (syncLogs.isNotEmpty()) {
+            listState.animateScrollToItem(syncLogs.size - 1)
+        }
+    }
+
+    // Check auth status on first composition
+    LaunchedEffect(Unit) {
+        authViewModel.checkAuthStatus()
+    }
 
     Scaffold(
-        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = { Text("Settings") },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
-                },
-                scrollBehavior = scrollBehavior
+                }
             )
         }
-    ) { padding ->
+    ) { paddingValues ->
         Column(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(paddingValues)
                 .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                text = "Appearance",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-
+            // Dropbox Sync Section
             Card(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    ) {
+                        Icon(
+                            imageVector = when (authState) {
+                                is AuthState.Authenticated -> Icons.Default.CloudSync
+                                else -> Icons.Default.CloudOff
+                            },
+                            contentDescription = null,
+                            tint = when (authState) {
+                                is AuthState.Authenticated -> MaterialTheme.colorScheme.primary
+                                else -> MaterialTheme.colorScheme.error
+                            }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Dropbox Sync",
+                            style = MaterialTheme.typography.headlineSmall
+                        )
+                    }
+
+                    // Status
+                    Text(
+                        text = when (val state = authState) {
+                            AuthState.Idle -> "Checking..."
+                            AuthState.NotAuthenticated -> "Not connected"
+                            AuthState.Authorizing -> "Authorizing..."
+                            AuthState.Authenticated -> "Connected"
+                            AuthState.Offline -> "Offline"
+                            is AuthState.Error -> "Error: ${state.message}"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = when (authState) {
+                            is AuthState.Authenticated -> MaterialTheme.colorScheme.primary
+                            is AuthState.Error -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.onSurface
+                        },
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    // Action Buttons
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        when (authState) {
+                            is AuthState.NotAuthenticated, is AuthState.Error -> {
+                                FilledTonalButton(
+                                    onClick = { authViewModel.startAuth(context) },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.Login, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Connect")
+                                }
+                            }
+                            is AuthState.Authenticated -> {
+                                OutlinedButton(
+                                    onClick = { authViewModel.logout() },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.Logout, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Disconnect")
+                                }
+                            }
+                            else -> {
+                                // Authorizing state
+                                FilledTonalButton(
+                                    onClick = { },
+                                    enabled = false,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Connecting...")
+                                }
+                            }
+                        }
+                    }
+
+                    // Test buttons when authenticated
+                    if (authState is AuthState.Authenticated) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { authViewModel.testUpload() },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Upload, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Test Upload")
+                            }
+                            
+                            OutlinedButton(
+                                onClick = { authViewModel.testDownload() },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Test Download")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Sync Debug Console
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Info,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("Dark Theme", style = MaterialTheme.typography.bodyLarge)
-                                Text(
-                                    "Use dark color scheme",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                        Text(
+                            text = "Sync Console",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        
+                        TextButton(
+                            onClick = { authViewModel.clearLogs() }
+                        ) {
+                            Text("Clear")
+                        }
+                    }
+
+                    // Logs
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        items(syncLogs) { log ->
+                            SyncLogItem(log = log)
+                        }
+                        
+                        if (syncLogs.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "No sync activity yet",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
-                        Switch(
-                            checked = isDarkTheme,
-                            onCheckedChange = { isDarkTheme = it }
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Info,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("Dynamic Colors", style = MaterialTheme.typography.bodyLarge)
-                                Text(
-                                    "Apply system wallpaper colors (Android 12+)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        Switch(
-                            checked = isDynamicColor,
-                            onCheckedChange = { isDynamicColor = it }
-                        )
                     }
                 }
             }
-
-            Text(
-                text = "Storage",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Storage,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text("Local Storage", style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                "Snippets saved locally on device",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-
-            Text(
-                text = "Sync",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Sync,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text("Dropbox Sync", style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                "Sync snippets with Dropbox",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedButton(
-                        onClick = { },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Connect Dropbox")
-                    }
-                }
-            }
-
-            Text(
-                text = "About",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("DarkNote", style = MaterialTheme.typography.titleLarge)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "Version 1.0.0",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "A snippet manager for code and commands.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        "Local-first, sync with Dropbox.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+}
+
+@Composable
+private fun SyncLogItem(
+    log: com.darknote.android.viewmodel.SyncLog,
+    modifier: Modifier = Modifier
+) {
+    val logColor = when (log.type) {
+        LogType.SUCCESS -> Color(0xFF4CAF50)
+        LogType.ERROR -> Color(0xFFF44336)
+        LogType.WARNING -> Color(0xFFFF9800)
+        LogType.INFO -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = log.timestamp,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.padding(end = 8.dp)
+        )
+        
+        Text(
+            text = log.type.name,
+            style = MaterialTheme.typography.bodySmall,
+            color = logColor,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.padding(end = 8.dp)
+        )
+        
+        Text(
+            text = log.message,
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
