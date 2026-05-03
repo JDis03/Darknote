@@ -93,9 +93,11 @@ fun MainScreen() {
     // Sync Engine
     val syncEngine = remember {
         SyncEngine(
-            snippetRepository = databaseFactory.snippetRepository,
             dropboxClient = dropboxClient,
-            coroutineScope = scope
+            snippetRepository = databaseFactory.snippetRepository,
+            folderRepository = databaseFactory.folderRepository,
+            syncMetadataRepository = databaseFactory.syncMetadataRepository,
+            storageService = storageService
         )
     }
     
@@ -123,7 +125,7 @@ fun MainScreen() {
                     watcherSync.start()
                 }
             }
-            is AuthState.NotAuthenticated, is AuthState.Offline -> {
+            is AuthState.NotAuthenticated -> {
                 // Keep watching for local changes even when not authenticated
                 // so we can queue syncs for later
             }
@@ -140,19 +142,19 @@ fun MainScreen() {
     }
     
     // Sync state
-    val syncState by syncEngine.syncState.collectAsState()
+    val syncState by syncEngine.state.collectAsState()
     
-    // Periodic retry when Offline or in retryable Error state
+    // Periodic retry when in Error state
     LaunchedEffect(syncState) {
         while (true) {
-            if (syncState is SyncState.Offline || (syncState is SyncState.Error && (syncState as SyncState.Error).retryable)) {
+            if (syncState is SyncState.Error) {
                 delay(30_000L) // Retry every 30 seconds
                 if (dropboxClient.isAuthorized()) {
-                    println("[Main] Periodic retry: attempting sync after offline/error...")
+                    println("[Main] Periodic retry: attempting sync after error...")
                     syncEngine.sync()
                 }
             } else {
-                break // Stop looping when state is not Offline/Error
+                break // Stop looping when state is not Error
             }
         }
     }
@@ -407,42 +409,7 @@ fun MainScreen() {
                                 )
                             }
                         }
-                        is SyncState.Offline -> {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CloudOff,
-                                    contentDescription = "Offline",
-                                    tint = MaterialTheme.colorScheme.outline,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Text(
-                                    "Offline Mode",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.outline
-                                )
-                            }
-                        }
-                        is SyncState.AuthRequired -> {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = "Auth Required",
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Text(
-                                    "Auth Required - Reconnect",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
+
                         is SyncState.Error -> {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -454,13 +421,11 @@ fun MainScreen() {
                                     tint = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.size(20.dp)
                                 )
-                                if ((syncState as SyncState.Error).retryable) {
-                                    Text(
-                                        "Sync Error (retrying...)",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.error
-                                    )
-                                }
+                                Text(
+                                    "Sync Error: ${(syncState as SyncState.Error).message}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
                             }
                         }
                         else -> {
