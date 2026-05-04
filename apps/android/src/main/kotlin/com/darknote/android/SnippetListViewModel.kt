@@ -44,6 +44,12 @@ sealed class CreateSnippetState {
     data class Error(val message: String) : CreateSnippetState()
 }
 
+sealed class UiState {
+    data object Loading : UiState()
+    data object Success : UiState()
+    data class Error(val message: String) : UiState()
+}
+
 class SnippetListViewModel(
     private val snippetRepository: SnippetRepository,
     private val folderRepository: FolderRepository,
