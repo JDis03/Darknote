@@ -55,7 +55,7 @@ import com.darknote.android.SnippetListViewModel
 import com.darknote.android.ui.components.CreateSnippetSheet
 import com.darknote.android.ui.components.EditSnippetSheet
 import com.darknote.android.ui.components.EmptyStateView
-import com.darknote.android.ui.components.ExpandableFab
+import com.darknote.android.ui.components.CreateSnippetFab
 import com.darknote.android.ui.components.FilterBar
 import com.darknote.android.ui.components.SearchBar
 import com.darknote.android.ui.components.SnippetCard
@@ -87,7 +87,6 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
-    var isFabExpanded by remember { mutableStateOf(false) }
     var showCreateSheet by remember { mutableStateOf(false) }
     var showDetailSnippet by remember { mutableStateOf<Snippet?>(null) }
     var editSnippet by remember { mutableStateOf<Snippet?>(null) }
@@ -157,13 +156,8 @@ fun HomeScreen(
             }
         },
         floatingActionButton = {
-            ExpandableFab(
-                isExpanded = isFabExpanded,
-                onToggle = { isFabExpanded = !isFabExpanded },
-                onItemClick = {
-                    showCreateSheet = true
-                    isFabExpanded = false
-                }
+            CreateSnippetFab(
+                onClick = { showCreateSheet = true }
             )
         }
     ) { padding ->
