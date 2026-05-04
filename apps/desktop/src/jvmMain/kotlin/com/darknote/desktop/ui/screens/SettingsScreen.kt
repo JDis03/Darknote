@@ -2,6 +2,8 @@ package com.darknote.desktop.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
@@ -10,6 +12,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.darknote.desktop.viewmodel.AuthState
 import com.darknote.desktop.viewmodel.AuthViewModel
@@ -300,46 +305,119 @@ fun SettingsScreen(
                                     }
                                 }
                                 
-                                Spacer(modifier = Modifier.height(16.dp))
-                                
-                                OutlinedTextField(
-                                    value = authCode,
-                                    onValueChange = { authCode = it },
-                                    label = { Text("Authorization Code") },
-                                    placeholder = { Text("Paste code from browser") },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Key, contentDescription = null)
-                                    },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = MaterialTheme.shapes.medium
-                                )
-                                
-                                Spacer(modifier = Modifier.height(16.dp))
-                                
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    FilledTonalButton(
-                                        onClick = { authViewModel.completeAuth(authCode) },
-                                        enabled = authCode.isNotBlank(),
-                                        modifier = Modifier.weight(1f).height(48.dp)
-                                    ) {
-                                        Icon(Icons.Default.Check, null, modifier = Modifier.size(20.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Complete")
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                OutlinedTextField(
+                    value = authCode,
+                    onValueChange = { authCode = it },
+                    label = { Text("Authorization Code") },
+                    placeholder = { Text("Paste code from browser (Ctrl+V)") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Key, contentDescription = null)
+                    },
+                    trailingIcon = {
+                        // Paste button for better UX
+                        IconButton(
+                            onClick = {
+                                try {
+                                    val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
+                                    val data = clipboard.getContents(null)
+                                    if (data != null && data.isDataFlavorSupported(java.awt.datatransfer.DataFlavor.stringFlavor)) {
+                                        val text = data.getTransferData(java.awt.datatransfer.DataFlavor.stringFlavor) as String
+                                        authCode = text.trim()
                                     }
-                                    OutlinedButton(
-                                        onClick = { 
-                                            authViewModel.skipAuth()
-                                            authCode = ""
-                                        },
-                                        modifier = Modifier.weight(1f).height(48.dp)
-                                    ) {
-                                        Text("Cancel")
-                                    }
+                                } catch (e: Exception) {
+                                    // Ignore clipboard errors
                                 }
+                            }
+                        ) {
+                            Icon(
+                                Icons.Default.ContentPaste,
+                                contentDescription = "Paste from clipboard",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onKeyEvent { keyEvent ->
+                            // Handle Ctrl+V manually for better reliability
+                            if (keyEvent.type == KeyEventType.KeyDown && 
+                                keyEvent.isCtrlPressed && keyEvent.key == Key.V) {
+                                try {
+                                    val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
+                                    val data = clipboard.getContents(null)
+                                    if (data != null && data.isDataFlavorSupported(java.awt.datatransfer.DataFlavor.stringFlavor)) {
+                                        val text = data.getTransferData(java.awt.datatransfer.DataFlavor.stringFlavor) as String
+                                        authCode = text.trim()
+                                        return@onKeyEvent true
+                                    }
+                                } catch (e: Exception) {
+                                    // Ignore clipboard errors
+                                }
+                            }
+                            false
+                        },
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            if (authCode.isNotBlank()) {
+                                authViewModel.completeAuth(authCode)
+                            }
+                        }
+                    ),
+                    shape = MaterialTheme.shapes.medium
+                )
+                                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Helper text with instructions
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Use Ctrl+V to paste or click the paste button",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilledTonalButton(
+                        onClick = { authViewModel.completeAuth(authCode) },
+                        enabled = authCode.isNotBlank(),
+                        modifier = Modifier.weight(1f).height(48.dp)
+                    ) {
+                        Icon(Icons.Default.Check, null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Complete")
+                    }
+                    OutlinedButton(
+                        onClick = { 
+                            authViewModel.skipAuth()
+                            authCode = ""
+                        },
+                        modifier = Modifier.weight(1f).height(48.dp)
+                    ) {
+                        Text("Cancel")
+                    }
+                }
                             } else {
                                 Box(
                                     modifier = Modifier.fillMaxWidth().padding(32.dp),
