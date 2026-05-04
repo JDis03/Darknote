@@ -19,6 +19,7 @@ import com.darknote.core.storage.FileStorageService
 import com.darknote.persistence.database.AndroidDriverFactory
 import com.darknote.persistence.database.DatabaseFactory
 import com.darknote.sync.client.DropboxClientFactory
+import com.darknote.sync.engine.SyncEngine
 import com.darknote.android.viewmodel.AuthViewModel
 import kotlinx.coroutines.launch
 import java.io.File
@@ -40,11 +41,21 @@ class MainActivity : ComponentActivity() {
             this
         )
 
+        // Create Sync Engine
+        val syncEngine = SyncEngine(
+            dropboxClient = DropboxClientFactory.create(),
+            snippetRepository = databaseFactory.snippetRepository,
+            folderRepository = databaseFactory.folderRepository,
+            syncMetadataRepository = databaseFactory.syncMetadataRepository,
+            storageService = storageService
+        )
+
         val viewModel = SnippetListViewModel(
             snippetRepository = databaseFactory.snippetRepository,
             folderRepository = databaseFactory.folderRepository,
             storageService = storageService,
-            clipboardManager = clipboardManager
+            clipboardManager = clipboardManager,
+            syncEngine = syncEngine
         )
 
         val authViewModel = AuthViewModel(
