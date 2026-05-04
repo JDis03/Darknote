@@ -180,4 +180,20 @@ class SnippetRepositoryImpl(
             }
         )
     }
+    
+    override suspend fun getAllCached(): List<Snippet> {
+        return withContext(Dispatchers.Default) {
+            queries.selectAllSnippets()
+                .executeAsList()
+                .map { it.toSnippet() }
+        }
+    }
+    
+    override suspend fun getByIdCached(id: String): Snippet? {
+        return withContext(Dispatchers.Default) {
+            queries.selectSnippetById(id)
+                .executeAsOneOrNull()
+                ?.toSnippet()
+        }
+    }
 }

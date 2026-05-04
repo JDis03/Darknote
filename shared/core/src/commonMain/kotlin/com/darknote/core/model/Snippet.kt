@@ -17,7 +17,7 @@ data class Snippet(
     val isFavorite: Boolean = false,
     val createdAt: Long,
     val modifiedAt: Long,
-    val syncStatus: SyncStatus = SyncStatus.PENDING_UPLOAD,
+    val syncStatus: SyncStatus = SyncStatus.NOT_SYNCED,
     val localPath: String,       // Path to .txt file
     val docPath: String? = null  // Optional path to .md documentation
 ) {
@@ -28,8 +28,10 @@ data class Snippet(
 }
 
 enum class SyncStatus {
+    NOT_SYNCED,
     SYNCED,
     PENDING_UPLOAD,
     PENDING_DOWNLOAD,
-    CONFLICT
+    CONFLICT,
+    ERROR
 }

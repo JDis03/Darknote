@@ -22,6 +22,8 @@ import com.darknote.core.storage.FileStorageService
 import com.darknote.core.data.DemoDataInitializer
 import com.darknote.desktop.ui.tree.*
 import com.darknote.desktop.ui.dialogs.RenameDialog
+import com.darknote.desktop.ui.editor.ViewManagerFixed
+import com.darknote.desktop.ui.editor.SaveStatus as EditorSaveStatus
 import com.darknote.desktop.ui.screens.SettingsScreen
 import com.darknote.desktop.viewmodel.SnippetTreeViewModel
 import com.darknote.desktop.viewmodel.AuthState
@@ -35,13 +37,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
-// Save status enum
-sealed class SaveStatus {
-    object Idle : SaveStatus()
-    object Saving : SaveStatus()
-    object Saved : SaveStatus()
-    object Error : SaveStatus()
-}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 fun main() = application {
@@ -78,8 +74,7 @@ fun MainScreen() {
         SnippetTreeViewModel(
             snippetRepository = databaseFactory.snippetRepository,
             folderRepository = databaseFactory.folderRepository,
-            fileStorageService = storageService,
-            scope = scope
+            fileStorageService = storageService
         )
     }
     
@@ -93,9 +88,11 @@ fun MainScreen() {
     // Sync Engine
     val syncEngine = remember {
         SyncEngine(
-            snippetRepository = databaseFactory.snippetRepository,
             dropboxClient = dropboxClient,
-            coroutineScope = scope
+            snippetRepository = databaseFactory.snippetRepository,
+            folderRepository = databaseFactory.folderRepository,
+            syncMetadataRepository = databaseFactory.syncMetadataRepository,
+            storageService = storageService
         )
     }
     
@@ -108,7 +105,6 @@ fun MainScreen() {
     val watcherSync = remember {
         WatcherSync(
             syncEngine = syncEngine,
-            scope = scope,
             snippetsDir = File(System.getProperty("user.home"), ".config/darknote/snippets")
         )
     }
@@ -123,7 +119,7 @@ fun MainScreen() {
                     watcherSync.start()
                 }
             }
-            is AuthState.NotAuthenticated, is AuthState.Offline -> {
+            is AuthState.NotAuthenticated -> {
                 // Keep watching for local changes even when not authenticated
                 // so we can queue syncs for later
             }
@@ -140,19 +136,44 @@ fun MainScreen() {
     }
     
     // Sync state
-    val syncState by syncEngine.syncState.collectAsState()
-    
-    // Periodic retry when Offline or in retryable Error state
-    LaunchedEffect(syncState) {
+    val syncState by syncEngine.state.collectAsState()
+
+    LaunchedEffect(Unit) {
+        if (dropboxClient.isAuthorized()) {
+            println("[Main] Running initial pull-sync...")
+            try {
+                syncEngine.sync()
+                println("[Main] Initial sync completed")
+            } catch (e: Exception) {
+                println("[Main] Initial sync failed: ${e.message}")
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
         while (true) {
-            if (syncState is SyncState.Offline || (syncState is SyncState.Error && (syncState as SyncState.Error).retryable)) {
-                delay(30_000L) // Retry every 30 seconds
-                if (dropboxClient.isAuthorized()) {
-                    println("[Main] Periodic retry: attempting sync after offline/error...")
+            delay(120_000L)
+            if (dropboxClient.isAuthorized()) {
+                println("[Main] Periodic pull-sync...")
+                try {
                     syncEngine.sync()
+                } catch (e: Exception) {
+                    println("[Main] Periodic sync failed: ${e.message}")
                 }
-            } else {
-                break // Stop looping when state is not Offline/Error
+            }
+        }
+    }
+
+    LaunchedEffect(syncState) {
+        if (syncState is SyncState.Error) {
+            delay(30_000L)
+            if (dropboxClient.isAuthorized()) {
+                println("[Main] Periodic retry: attempting sync after error...")
+                try {
+                    syncEngine.sync()
+                } catch (e: Exception) {
+                    println("[Main] Auto-retry failed: ${e.message}")
+                }
             }
         }
     }
@@ -166,14 +187,16 @@ fun MainScreen() {
         initializer.initializeIfEmpty()
     }
     
-    val selectedItemId by viewModel.selectedItemId
-    val visibleItems = viewModel.visibleItems
+    val selectedItemId by viewModel.selectedItemId.collectAsState()
+    val visibleItems by viewModel.visibleItems.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val expandedFolderIds by viewModel.expandedFolderIds.collectAsState()
     
     // Editor state
     var editorContent by remember { mutableStateOf("") }
     var originalContent by remember { mutableStateOf("") }
     var isModified by remember { mutableStateOf(false) }
-    var saveStatus by remember { mutableStateOf<SaveStatus>(SaveStatus.Idle as SaveStatus) }
+    var saveStatus by remember { mutableStateOf<EditorSaveStatus>(EditorSaveStatus.Idle) }
     
     // Dialog states
     var showRenameDialog by remember { mutableStateOf(false) }
@@ -198,7 +221,7 @@ fun MainScreen() {
             editorContent = content
             originalContent = content
             isModified = false
-            saveStatus = SaveStatus.Idle
+            saveStatus = EditorSaveStatus.Idle
         } ?: run {
             editorContent = ""
             originalContent = ""
@@ -211,17 +234,17 @@ fun MainScreen() {
         if (isModified && editorContent != originalContent) {
             delay(2000) // 2 seconds auto-save
             selectedSnippet?.let { snippet ->
-                saveStatus = SaveStatus.Saving
+                saveStatus = EditorSaveStatus.Saving
                 scope.launch {
                     val updatedSnippet = snippet.copy(content = editorContent)
                     val result = storageService.saveSnippetContent(updatedSnippet)
                     if (result.isSuccess) {
-                        saveStatus = SaveStatus.Saved
+                        saveStatus = EditorSaveStatus.Saved
                         originalContent = editorContent
                         isModified = false
                         viewModel.updateSnippetContent(snippet.id, editorContent)
                     } else {
-                        saveStatus = SaveStatus.Error
+                        saveStatus = EditorSaveStatus.Error
                     }
                 }
             }
@@ -231,20 +254,24 @@ fun MainScreen() {
     // Save action (reused by Ctrl+S and Save button)
     fun performSave() {
         selectedSnippet?.let { snippet ->
-            saveStatus = SaveStatus.Saving
+            saveStatus = EditorSaveStatus.Saving
             scope.launch {
                 val updatedSnippet = snippet.copy(content = editorContent)
                 val result = storageService.saveSnippetContent(updatedSnippet)
                 if (result.isSuccess) {
-                    saveStatus = SaveStatus.Saved
+                    saveStatus = EditorSaveStatus.Saved
                     originalContent = editorContent
                     isModified = false
                     viewModel.updateSnippetContent(snippet.id, editorContent)
                     if (dropboxClient.isAuthorized()) {
-                        syncEngine.sync()
+                        try {
+                            syncEngine.sync()
+                        } catch (e: Exception) {
+                            println("[Main] Sync after save failed: ${e.message}")
+                        }
                     }
                 } else {
-                    saveStatus = SaveStatus.Error
+                    saveStatus = EditorSaveStatus.Error
                 }
             }
         }
@@ -348,16 +375,16 @@ fun MainScreen() {
                         
                         // Save status indicator
                         when (saveStatus) {
-                            is SaveStatus.Saving -> CircularProgressIndicator(
+                            EditorSaveStatus.Saving -> CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp
                             )
-                            is SaveStatus.Saved -> Icon(
+                            EditorSaveStatus.Saved -> Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = "Saved",
                                 tint = MaterialTheme.colorScheme.primary
                             )
-                            is SaveStatus.Error -> Icon(
+                            EditorSaveStatus.Error -> Icon(
                                 imageVector = Icons.Default.Error,
                                 contentDescription = "Error",
                                 tint = MaterialTheme.colorScheme.error
@@ -407,42 +434,7 @@ fun MainScreen() {
                                 )
                             }
                         }
-                        is SyncState.Offline -> {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CloudOff,
-                                    contentDescription = "Offline",
-                                    tint = MaterialTheme.colorScheme.outline,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Text(
-                                    "Offline Mode",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.outline
-                                )
-                            }
-                        }
-                        is SyncState.AuthRequired -> {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = "Auth Required",
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Text(
-                                    "Auth Required - Reconnect",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
+
                         is SyncState.Error -> {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -454,13 +446,11 @@ fun MainScreen() {
                                     tint = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.size(20.dp)
                                 )
-                                if ((syncState as SyncState.Error).retryable) {
-                                    Text(
-                                        "Sync Error (retrying...)",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.error
-                                    )
-                                }
+                                Text(
+                                    "Sync Error: ${(syncState as SyncState.Error).message}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
                             }
                         }
                         else -> {
@@ -493,7 +483,7 @@ fun MainScreen() {
                 state = TreeViewState(
                     items = visibleItems,
                     selectedItemId = selectedItemId,
-                    searchQuery = viewModel.searchQuery.value
+                    searchQuery = searchQuery
                 ),
                 onItemClick = { item -> viewModel.selectItem(item.id) },
                 onItemToggle = { folder -> viewModel.toggleFolder(folder.id) },
@@ -520,107 +510,27 @@ fun MainScreen() {
                 color = MaterialTheme.colorScheme.outlineVariant
             )
             
-            // Editor Area
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .padding(16.dp)
-            ) {
-                if (selectedSnippet != null) {
-                    // Title
-                    Text(
-                        text = selectedSnippet.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    
-                    // Editor
-                    OutlinedTextField(
-                        value = editorContent,
-                        onValueChange = { 
-                            editorContent = it
-                            isModified = it != originalContent
-                            saveStatus = SaveStatus.Idle
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .onFocusChanged { focusState ->
-                                isEditorFocused = focusState.isFocused
-                            },
-                        textStyle = MaterialTheme.typography.bodyMedium,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surface,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                        )
-                    )
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    // Action buttons
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                clipboardManager.copy(editorContent, sanitize = true)
-                            }
-                        ) {
-                            Text("Copy Sanitized")
-                        }
-                        
-                        OutlinedButton(
-                            onClick = {
-                                clipboardManager.copy(editorContent, sanitize = false)
-                            }
-                        ) {
-                            Text("Copy Raw")
-                        }
-                        
-                        Spacer(modifier = Modifier.weight(1f))
-                        
-                        // Status text
-                        Text(
-                            text = when (saveStatus) {
-                                is SaveStatus.Saving -> "Saving..."
-                                is SaveStatus.Saved -> "Saved"
-                                is SaveStatus.Error -> "Error saving"
-                                else -> if (isModified) "Modified" else ""
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = when (saveStatus) {
-                                is SaveStatus.Saved -> MaterialTheme.colorScheme.primary
-                                is SaveStatus.Error -> MaterialTheme.colorScheme.error
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                        )
-                    }
-                } else {
-                    // Empty state
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Text(
-                                "Select a snippet from the sidebar",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                "Or create a new one using + button",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-                }
-            }
+            // Kate-style ViewManager with tabs and splits (FIXED VERSION)
+            ViewManagerFixed(
+                snippet = selectedSnippet,
+                content = editorContent,
+                onContentChange = { 
+                    editorContent = it
+                    isModified = it != originalContent
+                    saveStatus = EditorSaveStatus.Idle
+                },
+                isModified = isModified,
+                saveStatus = saveStatus,
+                onCopy = {
+                    clipboardManager.copy(editorContent, sanitize = true)
+                },
+                onCopyRaw = {
+                    clipboardManager.copy(editorContent, sanitize = false)
+                },
+                onSave = { performSave() },
+                onFocusChanged = { isEditorFocused = it },
+                modifier = Modifier.weight(1f)
+            )
         }
         
         // Rename dialog

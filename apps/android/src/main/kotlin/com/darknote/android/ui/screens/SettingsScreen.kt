@@ -34,8 +34,12 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val authState by authViewModel.authState
+    val authUrl by authViewModel.authUrl
     val syncLogs by authViewModel.syncLogs
     val listState = rememberLazyListState()
+    
+    // State for manual code entry (Joplin style)
+    var authCode by remember { mutableStateOf("") }
 
     // Auto-scroll to bottom when new logs are added
     LaunchedEffect(syncLogs.size) {
@@ -117,47 +121,114 @@ fun SettingsScreen(
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
 
-                    // Action Buttons
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        when (authState) {
-                            is AuthState.NotAuthenticated, is AuthState.Error -> {
+                    // OAuth Setup Steps (Joplin style)
+                    when (authState) {
+                        is AuthState.NotAuthenticated, is AuthState.Error -> {
+                            // Step 1: Get auth URL
+                            if (authUrl == null) {
                                 FilledTonalButton(
                                     onClick = { authViewModel.startAuth(context) },
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Icon(Icons.Default.Login, contentDescription = null)
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Connect")
+                                    Text("Get Authorization URL")
                                 }
-                            }
-                            is AuthState.Authenticated -> {
-                                OutlinedButton(
-                                    onClick = { authViewModel.logout() },
-                                    modifier = Modifier.weight(1f)
+                            } else {
+                                // Step 2: Show URL and code input
+                                Text(
+                                    text = "Step 1: Tap the URL below to authorize DarkNote:",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                                
+                                // Clickable auth URL
+                                OutlinedCard(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 16.dp),
+                                    onClick = {
+                                        authViewModel.openAuthUrl(context)
+                                    }
                                 ) {
-                                    Icon(Icons.Default.Logout, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Disconnect")
-                                }
-                            }
-                            else -> {
-                                // Authorizing state
-                                FilledTonalButton(
-                                    onClick = { },
-                                    enabled = false,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp
+                                    Text(
+                                        text = authUrl!!,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(16.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Connecting...")
+                                }
+                                
+                                Text(
+                                    text = "Step 2: Enter the code from Dropbox:",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                                
+                                // Code input field
+                                OutlinedTextField(
+                                    value = authCode,
+                                    onValueChange = { authCode = it },
+                                    label = { Text("Authorization code") },
+                                    placeholder = { Text("Enter code here") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                )
+                                
+                                // Submit button
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = { 
+                                            authViewModel.logout() // Clear everything and start over
+                                            authCode = ""
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Reset")
+                                    }
+                                    
+                                    FilledTonalButton(
+                                        onClick = { 
+                                            authViewModel.completeAuth(authCode.trim())
+                                        },
+                                        enabled = authCode.trim().isNotEmpty(),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Submit")
+                                    }
                                 }
                             }
                         }
+                        is AuthState.Authorizing -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text("Verifying authorization code...")
+                            }
+                        }
+                        is AuthState.Authenticated -> {
+                            OutlinedButton(
+                                onClick = { 
+                                    authViewModel.logout()
+                                    authCode = "" // Clear code on logout
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Logout, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Disconnect")
+                            }
+                        }
+                        else -> {}
                     }
 
                     // Test buttons when authenticated

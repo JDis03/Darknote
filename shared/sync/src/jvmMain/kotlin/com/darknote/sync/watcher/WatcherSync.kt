@@ -16,25 +16,19 @@ import kotlinx.coroutines.flow.*
  */
 class WatcherSync(
     private val syncEngine: SyncEngine,
-    private val scope: CoroutineScope,
     private val snippetsDir: java.io.File = java.io.File(System.getProperty("user.home"), ".config/darknote/snippets"),
     private val debounceMs: Long = 2000L
 ) {
+    private val internalScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var fileWatcher: FileWatcher? = null
     private var syncJob: Job? = null
 
-    // Exposed state for UI
     private val _isWatching = MutableStateFlow(false)
     val isWatching: StateFlow<Boolean> = _isWatching.asStateFlow()
 
     private val _lastSyncTrigger = MutableStateFlow(0L)
     val lastSyncTrigger: StateFlow<Long> = _lastSyncTrigger.asStateFlow()
 
-    /**
-     * Start watching for file changes and auto-syncing.
-     * Only starts if Dropbox is authorized; otherwise, starts watching
-     * but sync will not be triggered until authorization.
-     */
     fun start() {
         if (fileWatcher != null) {
             println("[WatcherSync] Already started")
@@ -43,16 +37,14 @@ class WatcherSync(
 
         fileWatcher = FileWatcher(
             directory = snippetsDir,
-            scope = scope,
+            scope = internalScope,
             debounceMs = debounceMs
         )
 
-        // Start the file watcher
         fileWatcher!!.start()
         _isWatching.value = true
 
-        // Observe debounced changes and trigger sync
-        syncJob = scope.launch {
+        syncJob = internalScope.launch {
             fileWatcher!!.debouncedChanges
                 .filter { it }
                 .collect {
@@ -61,8 +53,7 @@ class WatcherSync(
                     try {
                         val result = syncEngine.sync()
                         if (result.isSuccess) {
-                            val syncResult = result.getOrNull()
-                            println("[WatcherSync] Auto-sync completed: uploaded=${syncResult?.uploaded}, downloaded=${syncResult?.downloaded}")
+                            println("[WatcherSync] Auto-sync completed successfully")
                         } else {
                             println("[WatcherSync] Auto-sync failed: ${result.exceptionOrNull()?.message}")
                         }
@@ -77,20 +68,15 @@ class WatcherSync(
         println("[WatcherSync] Started watching: ${snippetsDir.absolutePath}")
     }
 
-    /**
-     * Stop watching and clean up all resources.
-     */
     fun stop() {
         syncJob?.cancel()
         syncJob = null
         fileWatcher?.stop()
         fileWatcher = null
         _isWatching.value = false
+        internalScope.cancel()
         println("[WatcherSync] Stopped")
     }
 
-    /**
-     * Check if currently watching.
-     */
     val isRunning: Boolean get() = _isWatching.value
 }

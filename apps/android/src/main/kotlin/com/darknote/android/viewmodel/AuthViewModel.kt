@@ -54,24 +54,35 @@ class AuthViewModel(
     }
 
     /**
-     * Start OAuth authentication by opening browser.
+     * Generate OAuth URL (Joplin style - no auto-open).
      */
     fun startAuth(context: Context) {
         try {
-            _authState.value = AuthState.Authorizing
             val authUrl = dropboxClient.getAuthUrl()
             _authUrl.value = authUrl
-            
-            addLog("Starting OAuth flow...", LogType.INFO)
-            
-            // Open URL in Custom Tabs
-            val intent = CustomTabsIntent.Builder().build()
-            intent.launchUrl(context, Uri.parse(authUrl))
-            
-            addLog("Opened browser for authentication", LogType.INFO)
+            // Keep state as NotAuthenticated to show the URL and code input
+            addLog("OAuth URL generated", LogType.INFO)
         } catch (e: Exception) {
-            _authState.value = AuthState.Error("Failed to start auth: ${e.message}")
-            addLog("Error starting auth: ${e.message}", LogType.ERROR)
+            _authState.value = AuthState.Error("Failed to generate auth URL: ${e.message}")
+            addLog("Error generating auth URL: ${e.message}", LogType.ERROR)
+        }
+    }
+    
+    /**
+     * Open OAuth URL in browser manually.
+     */
+    fun openAuthUrl(context: Context) {
+        val url = _authUrl.value
+        if (url != null) {
+            try {
+                // Force external browser, not in-app
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url))
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+                addLog("Opened browser for authentication", LogType.INFO)
+            } catch (e: Exception) {
+                addLog("Failed to open browser: ${e.message}", LogType.ERROR)
+            }
         }
     }
 
@@ -82,10 +93,17 @@ class AuthViewModel(
         viewModelScope.launch {
             try {
                 _authState.value = AuthState.Authorizing
-                addLog("Completing authentication...", LogType.INFO)
+                addLog("Starting token exchange with code: ${code.take(10)}...", LogType.INFO)
                 
-                val result = dropboxClient.finishAuth(code)
-                if (result.isSuccess) {
+                // Add timeout handling
+                val result = kotlinx.coroutines.withTimeoutOrNull(60000) { // 60 second timeout
+                    dropboxClient.finishAuth(code)
+                }
+                
+                if (result == null) {
+                    _authState.value = AuthState.Error("Authentication timed out")
+                    addLog("Authentication timed out after 60 seconds", LogType.ERROR)
+                } else if (result.isSuccess) {
                     _authState.value = AuthState.Authenticated
                     addLog("Authentication successful!", LogType.SUCCESS)
                 } else {
@@ -115,7 +133,7 @@ class AuthViewModel(
                 
                 val result = dropboxClient.uploadFile(
                     localPath = testFile.absolutePath,
-                    remotePath = "/darknote_test_android.txt"
+                    remotePath = "/darknote/test-snippet-android-${System.currentTimeMillis()}.txt"
                 )
                 
                 testFile.delete() // Clean up
@@ -138,26 +156,22 @@ class AuthViewModel(
     fun testDownload() {
         viewModelScope.launch {
             try {
-                addLog("Testing download...", LogType.INFO)
-                
-                val tempFile = java.io.File.createTempFile("darknote_download", ".txt")
-                
-                val result = dropboxClient.downloadFile(
-                    remotePath = "/darknote_test_android.txt",
-                    localPath = tempFile.absolutePath
-                )
-                
+                addLog("Listing files in /darknote...", LogType.INFO)
+
+                val result = dropboxClient.listFiles("/darknote")
+
                 if (result.isSuccess) {
-                    val content = tempFile.readText()
-                    addLog("Download successful! Content: ${content.take(50)}...", LogType.SUCCESS)
+                    val files = result.getOrNull() ?: emptyList()
+                    addLog("Found ${files.size} files in Dropbox", LogType.SUCCESS)
+                    files.forEach { file ->
+                        addLog("  ${file.name} (${file.size} bytes)", LogType.INFO)
+                    }
                 } else {
                     val error = result.exceptionOrNull()?.message ?: "Unknown error"
-                    addLog("Download failed: $error", LogType.ERROR)
+                    addLog("List files failed: $error", LogType.ERROR)
                 }
-                
-                tempFile.delete() // Clean up
             } catch (e: Exception) {
-                addLog("Download error: ${e.message}", LogType.ERROR)
+                addLog("List exception: ${e.message}", LogType.ERROR)
             }
         }
     }
@@ -172,6 +186,7 @@ class AuthViewModel(
                 dropboxClient.logout()
             }
             _authState.value = AuthState.NotAuthenticated
+            _authUrl.value = null // Clear auth URL
             addLog("Logged out successfully", LogType.INFO)
         } catch (e: Exception) {
             addLog("Logout error: ${e.message}", LogType.ERROR)

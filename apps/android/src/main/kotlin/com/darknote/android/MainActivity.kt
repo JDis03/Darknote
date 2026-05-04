@@ -6,7 +6,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.darknote.android.clipboard.AndroidClipboardManager
@@ -19,11 +18,13 @@ import com.darknote.core.storage.FileStorageService
 import com.darknote.persistence.database.AndroidDriverFactory
 import com.darknote.persistence.database.DatabaseFactory
 import com.darknote.sync.client.DropboxClientFactory
+import com.darknote.sync.engine.SyncEngine
 import com.darknote.android.viewmodel.AuthViewModel
 import kotlinx.coroutines.launch
 import java.io.File
 
 class MainActivity : ComponentActivity() {
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -32,22 +33,36 @@ class MainActivity : ComponentActivity() {
         DropboxClientFactory.initialize(this)
 
         val storageDir = File(filesDir, "snippets").apply { mkdirs() }
-        val storageService = FileStorageService(storageDir)
+        // NOTE: baseDirectory must NOT include "snippets" — the path
+        // from generateSafePath already includes that prefix.
+        val storageService = FileStorageService(filesDir)
         val databaseFactory = DatabaseFactory(AndroidDriverFactory(this))
         val clipboardManager = AndroidClipboardManager(
             ClipboardSanitizer(ClipboardSettings.DEFAULT),
             this
         )
 
+        // Shared Dropbox client — auth + sync must use same instance
+        val dropboxClient = DropboxClientFactory.create()
+
+        val syncEngine = SyncEngine(
+            dropboxClient = dropboxClient,
+            snippetRepository = databaseFactory.snippetRepository,
+            folderRepository = databaseFactory.folderRepository,
+            syncMetadataRepository = databaseFactory.syncMetadataRepository,
+            storageService = storageService
+        )
+
         val viewModel = SnippetListViewModel(
             snippetRepository = databaseFactory.snippetRepository,
             folderRepository = databaseFactory.folderRepository,
             storageService = storageService,
-            clipboardManager = clipboardManager
+            clipboardManager = clipboardManager,
+            syncEngine = syncEngine
         )
 
         val authViewModel = AuthViewModel(
-            dropboxClient = DropboxClientFactory.create()
+            dropboxClient = dropboxClient
         )
 
         lifecycleScope.launch {
@@ -72,5 +87,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        
     }
 }

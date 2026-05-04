@@ -15,11 +15,11 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 
 /**
- * JVM/Desktop implementation of DropboxClient using official SDK.
+ * JVM/Desktop implementation of DropboxClient using PKCE auth (no secret required).
+ * This is the recommended approach for desktop applications.
  */
 class JvmDropboxClient(
-    private val appKey: String,
-    private val appSecret: String? = null
+    private val appKey: String
 ) : DropboxClient {
 
     private val config = DbxRequestConfig.newBuilder("darknote/1.0")
@@ -42,12 +42,9 @@ class JvmDropboxClient(
     override fun isAuthorized(): Boolean = client != null
 
     override fun getAuthUrl(): String {
-        val appInfo = if (appSecret != null) {
-            DbxAppInfo(appKey, appSecret)
-        } else {
-            DbxAppInfo(appKey)
-        }
-
+        // Use PKCE auth without secret - recommended for desktop apps
+        val appInfo = DbxAppInfo(appKey)
+        
         pkceWebAuth = DbxPKCEWebAuth(config, appInfo)
         val authRequest = DbxWebAuth.newRequestBuilder()
             .withNoRedirect()
@@ -89,7 +86,8 @@ class JvmDropboxClient(
                                 path = entry.pathLower ?: entry.name,
                                 name = entry.name,
                                 modifiedTime = modifiedTime,
-                                size = entry.size
+                                size = entry.size,
+                                rev = entry.rev
                             )
                         }
                         else -> null // Skip folders
@@ -98,7 +96,19 @@ class JvmDropboxClient(
                 Result.success(files)
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            // Check if it's a "folder not found" error
+            if (e.message?.contains("path/not_found") == true || 
+                e.message?.contains("not_found") == true) {
+                // Create the folder and return empty list
+                try {
+                    currentClient.files().createFolderV2(path)
+                    Result.success(emptyList())
+                } catch (createError: Exception) {
+                    Result.failure(Exception("Folder doesn't exist and couldn't create it: ${createError.message}"))
+                }
+            } else {
+                Result.failure(e)
+            }
         }
     }
 
@@ -207,6 +217,7 @@ class JvmDropboxClient(
  * JVM implementation of factory.
  */
 actual object DropboxClientFactory {
+    // DarkNote official Dropbox app credentials (PKCE - no secret required)
     private const val APP_KEY = "97rske3f4p28pex"
 
     actual fun create(): DropboxClient {

@@ -51,6 +51,8 @@ kotlin {
                 implementation("com.squareup.okhttp3:okhttp:4.12.0")
                 // Android specific dependencies
                 implementation("androidx.browser:browser:1.8.0") // For OAuth in browser
+                // Encrypted SharedPreferences for secure token storage
+                implementation("androidx.security:security-crypto:1.1.0-alpha06")
             }
         }
 
