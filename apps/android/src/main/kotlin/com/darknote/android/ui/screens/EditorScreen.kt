@@ -1,11 +1,10 @@
 package com.darknote.android.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.*
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -14,14 +13,25 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.darknote.android.SnippetListViewModel
 import com.darknote.core.model.Snippet
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+private val dateFormat = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault())
 
 enum class EditorSaveStatus { Idle, Saving, Saved, Error }
 
@@ -42,7 +52,9 @@ fun EditorScreen(
     var title by remember { mutableStateOf("") }
     var isModified by remember { mutableStateOf(false) }
     var saveStatus by remember { mutableStateOf(EditorSaveStatus.Idle) }
+    var showMoreSheet by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
+    val scrollState = rememberScrollState()
 
     LaunchedEffect(snippet) {
         snippet?.let {
@@ -71,21 +83,27 @@ fun EditorScreen(
 
     if (snippet == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
+            CircularProgressIndicator(strokeWidth = 2.dp)
         }
         return
     }
 
     val folderName = snippet.folderId?.let { fid -> folders.find { it.id == fid }?.name }
+    val lines = content.lines().size
+    val chars = content.length
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
                     Column {
                         Text(
                             text = title,
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         if (folderName != null) {
                             Text(
@@ -98,114 +116,99 @@ fun EditorScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            "Back",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
                     }
                 },
                 actions = {
-                    // Save status indicator
                     when (saveStatus) {
-                        EditorSaveStatus.Saving -> {
-                            Icon(
-                                Icons.Default.Sync,
-                                "Saving...",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        EditorSaveStatus.Saved -> {
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                "Saved",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        EditorSaveStatus.Error -> {
-                            Icon(
-                                Icons.Default.Error,
-                                "Error saving",
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                        }
-                        EditorSaveStatus.Idle -> {
-                            if (isModified) {
-                                Text(
-                                    "●",
-                                    color = MaterialTheme.colorScheme.primary,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
+                        EditorSaveStatus.Saving -> Icon(
+                            Icons.Default.Sync, "Saving...",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        EditorSaveStatus.Saved -> Icon(
+                            Icons.Default.CheckCircle, "Saved",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        EditorSaveStatus.Error -> Icon(
+                            Icons.Default.Error, "Error",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        EditorSaveStatus.Idle -> if (isModified) Text(
+                            "●", color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(4.dp))
 
-                    // Copy sanitized
-                    IconButton(onClick = {
-                        viewModel.copySnippet(snippet)
-                    }) {
-                        Icon(Icons.Default.ContentCopy, "Copy sanitized")
+                    IconButton(onClick = { viewModel.copySnippet(snippet) }) {
+                        Icon(Icons.Default.ContentCopy, "Copy")
                     }
-
-                    // Actions menu
-                    var showMenu by remember { mutableStateOf(false) }
-                    Box {
-                        IconButton(onClick = { showMenu = true }) {
-                            Icon(Icons.Default.MoreVert, "More")
-                        }
-                        DropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Copy raw") },
-                                onClick = {
-                                    showMenu = false
-                                    viewModel.copyRawSnippet(snippet)
-                                },
-                                leadingIcon = { Icon(Icons.Default.ContentPaste, null) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(if (snippet.isFavorite) "Remove favorite" else "Add favorite") },
-                                onClick = {
-                                    showMenu = false
-                                    viewModel.toggleFavorite(snippet)
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        if (snippet.isFavorite) Icons.Default.Star else Icons.Default.StarOutline,
-                                        null
-                                    )
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Share") },
-                                onClick = {
-                                    showMenu = false
-                                    // TODO: share from context
-                                },
-                                leadingIcon = { Icon(Icons.Default.Share, null) }
-                            )
-                            HorizontalDivider()
-                            DropdownMenuItem(
-                                text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                                onClick = {
-                                    showMenu = false
-                                    viewModel.deleteSnippet(snippet)
-                                    onBack()
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.Delete,
-                                        null,
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                }
-                            )
-                        }
+                    IconButton(onClick = { showMoreSheet = true }) {
+                        Icon(Icons.Default.MoreVert, "More")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             )
+        },
+        bottomBar = {
+            // Obsidian-style bottom info bar
+            Surface(
+                tonalElevation = 1.dp,
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Language badge
+                    snippet.language?.let { lang ->
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            Text(
+                                text = lang,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.weight(1f))
+
+                    // Stats row
+                    Text(
+                        text = "$lines lines · $chars chars",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    snippet.language?.let {
+                        Spacer(Modifier.weight(1f))
+                        Spacer(Modifier.width(0.dp))
+                    }
+
+                    // Modified date
+                    Text(
+                        text = dateFormat.format(Date(snippet.modifiedAt)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     ) { padding ->
         Surface(
@@ -215,22 +218,162 @@ fun EditorScreen(
             color = MaterialTheme.colorScheme.surface
         ) {
             SelectionContainer {
-                OutlinedTextField(
-                    value = content,
-                    onValueChange = { content = it },
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .focusRequester(focusRequester)
-                        .padding(16.dp),
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        fontFamily = FontFamily.Monospace,
-                        lineHeight = MaterialTheme.typography.bodyLarge.lineHeight
-                    ),
-                    colors = TextFieldDefaults.outlinedTextFieldColors(
-                        focusedBorderColor = MaterialTheme.colorScheme.surface,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.surface,
-                        containerColor = MaterialTheme.colorScheme.surface
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                ) {
+                    // Tags row
+                    if (snippet.tags.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            snippet.tags.forEach { tag ->
+                                Surface(
+                                    shape = MaterialTheme.shapes.extraSmall,
+                                    color = MaterialTheme.colorScheme.tertiaryContainer
+                                ) {
+                                    Text(
+                                        text = "#$tag",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                    }
+
+                    // Editable title (always shown above content)
+                    BasicTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester),
+                        textStyle = MaterialTheme.typography.headlineSmall.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            lineHeight = 28.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        singleLine = true,
+                        decorationBox = { innerTextField ->
+                            if (title.isEmpty()) {
+                                Text(
+                                    "Untitled",
+                                    style = MaterialTheme.typography.headlineSmall.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        lineHeight = 28.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                )
+                            }
+                            innerTextField()
+                        }
                     )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // HorizontalDivider between title and content
+                    HorizontalDivider(
+                        thickness = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // Content editor
+                    BasicTextField(
+                        value = content,
+                        onValueChange = { content = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            fontFamily = FontFamily.Monospace,
+                            lineHeight = 22.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        decorationBox = { innerTextField ->
+                            if (content.isEmpty()) {
+                                Text(
+                                    "Start typing...",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontFamily = FontFamily.Monospace,
+                                        lineHeight = 22.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                    )
+                                )
+                            }
+                            innerTextField()
+                        }
+                    )
+
+                    // Bottom spacer for editor comfort
+                    Spacer(Modifier.height(80.dp))
+                }
+            }
+        }
+    }
+
+    // Bottom Sheet with actions
+    if (showMoreSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showMoreSheet = false },
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 32.dp)
+            ) {
+                // Copy raw
+                ListItem(
+                    headlineContent = { Text("Copy raw content") },
+                    leadingContent = { Icon(Icons.Default.ContentPaste, null) },
+                    modifier = Modifier.clickable {
+                        showMoreSheet = false
+                        viewModel.copyRawSnippet(snippet)
+                    }
+                )
+                // Favorite toggle
+                ListItem(
+                    headlineContent = { Text(if (snippet.isFavorite) "Remove from favorites" else "Add to favorites") },
+                    leadingContent = {
+                        Icon(
+                            if (snippet.isFavorite) Icons.Default.Star else Icons.Default.StarOutline,
+                            null
+                        )
+                    },
+                    modifier = Modifier.clickable {
+                        showMoreSheet = false
+                        viewModel.toggleFavorite(snippet)
+                    }
+                )
+                // Share
+                ListItem(
+                    headlineContent = { Text("Share snippet") },
+                    leadingContent = { Icon(Icons.Default.Share, null) },
+                    modifier = Modifier.clickable {
+                        showMoreSheet = false
+                        viewModel.shareSnippet(snippet, android.app.Activity())
+                    }
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                // Delete
+                ListItem(
+                    headlineContent = {
+                        Text("Delete snippet", color = MaterialTheme.colorScheme.error)
+                    },
+                    leadingContent = {
+                        Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
+                    },
+                    modifier = Modifier.clickable {
+                        showMoreSheet = false
+                        viewModel.deleteSnippet(snippet)
+                        onBack()
+                    }
                 )
             }
         }
