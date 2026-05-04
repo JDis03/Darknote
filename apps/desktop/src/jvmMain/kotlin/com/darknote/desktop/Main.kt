@@ -22,7 +22,7 @@ import com.darknote.core.storage.FileStorageService
 import com.darknote.core.data.DemoDataInitializer
 import com.darknote.desktop.ui.tree.*
 import com.darknote.desktop.ui.dialogs.RenameDialog
-import com.darknote.desktop.ui.editor.ViewManager
+import com.darknote.desktop.ui.editor.ViewManagerFixed
 import com.darknote.desktop.ui.editor.SaveStatus as EditorSaveStatus
 import com.darknote.desktop.ui.screens.SettingsScreen
 import com.darknote.desktop.viewmodel.SnippetTreeViewModel
@@ -510,8 +510,8 @@ fun MainScreen() {
                 color = MaterialTheme.colorScheme.outlineVariant
             )
             
-            // Kate-style ViewManager with tabs and splits
-            ViewManager(
+            // Kate-style ViewManager with tabs and splits (FIXED VERSION)
+            ViewManagerFixed(
                 snippet = selectedSnippet,
                 content = editorContent,
                 onContentChange = { 
@@ -529,9 +529,6 @@ fun MainScreen() {
                 },
                 onSave = { performSave() },
                 onFocusChanged = { isEditorFocused = it },
-                onSplitHorizontal = { /* TODO: Handle split actions */ },
-                onSplitVertical = { /* TODO: Handle split actions */ },
-                onCloseSplit = { /* TODO: Handle close split */ },
                 modifier = Modifier.weight(1f)
             )
         }

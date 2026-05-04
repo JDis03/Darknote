@@ -40,12 +40,20 @@ class EditorState {
 
     fun closeTab(index: Int) {
         if (index < 0 || index >= tabs.size) return
+        
+        val wasActive = index == activeTabIndex
         tabs.removeAt(index)
+        
         if (tabs.isEmpty()) {
             activeTabIndex = -1
-        } else if (activeTabIndex >= tabs.size) {
-            activeTabIndex = tabs.lastIndex
+        } else if (wasActive) {
+            // If we closed the active tab, select the one to the left if available, otherwise right
+            activeTabIndex = if (index > 0) index - 1 else 0
+        } else if (activeTabIndex > index) {
+            // If we closed a tab to the left of active, shift the active index
+            activeTabIndex--
         }
+        // If we closed a tab to the right of active, no change needed
     }
 
     fun closeTabById(snippetId: String) {
