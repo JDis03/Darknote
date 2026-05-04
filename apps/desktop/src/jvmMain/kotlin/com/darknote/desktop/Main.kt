@@ -141,11 +141,36 @@ fun MainScreen() {
     
     // Sync state
     val syncState by syncEngine.state.collectAsState()
-    
-    // Periodic retry when in Error state
+
+    LaunchedEffect(Unit) {
+        if (dropboxClient.isAuthorized()) {
+            println("[Main] Running initial pull-sync...")
+            try {
+                syncEngine.sync()
+                println("[Main] Initial sync completed")
+            } catch (e: Exception) {
+                println("[Main] Initial sync failed: ${e.message}")
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(120_000L)
+            if (dropboxClient.isAuthorized()) {
+                println("[Main] Periodic pull-sync...")
+                try {
+                    syncEngine.sync()
+                } catch (e: Exception) {
+                    println("[Main] Periodic sync failed: ${e.message}")
+                }
+            }
+        }
+    }
+
     LaunchedEffect(syncState) {
         if (syncState is SyncState.Error) {
-            delay(30_000L) // Retry after 30 seconds
+            delay(30_000L)
             if (dropboxClient.isAuthorized()) {
                 println("[Main] Periodic retry: attempting sync after error...")
                 try {
