@@ -299,9 +299,9 @@ class AndroidDropboxClient(
  * Android implementation of DropboxClientFactory
  */
 actual object DropboxClientFactory {
-    // Use Joplin's dev credentials for now (working OAuth setup)
-    private const val DEFAULT_APP_KEY = "cx9li9ur8taq1z7" // Joplin dev
-    private const val DEFAULT_APP_SECRET = "i8f9a1mvx3bijrt" // Joplin dev
+    // DarkNote official Dropbox app credentials
+    private const val DEFAULT_APP_KEY = "97rske3f4p28pex"
+    private const val DEFAULT_APP_SECRET = "gl8mmknb624o7c2"
     
     private var context: Context? = null
     private var appKey: String = DEFAULT_APP_KEY
