@@ -12,6 +12,7 @@ import com.darknote.core.model.SyncStatus
 import com.darknote.core.repository.FolderRepository
 import com.darknote.core.repository.SnippetRepository
 import com.darknote.core.storage.FileStorageService
+import com.darknote.sync.engine.SyncEngine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -47,7 +48,8 @@ class SnippetListViewModel(
     private val snippetRepository: SnippetRepository,
     private val folderRepository: FolderRepository,
     private val storageService: FileStorageService,
-    private val clipboardManager: ClipboardManager
+    private val clipboardManager: ClipboardManager,
+    private val syncEngine: SyncEngine
 ) : ViewModel() {
 
     private val _allSnippets = MutableStateFlow<List<Snippet>>(emptyList())
@@ -212,6 +214,10 @@ class SnippetListViewModel(
         viewModelScope.launch {
             deletedSnippets[snippet.id] = snippet
             snippetRepository.delete(snippet.id)
+            
+            // Trigger sync after delete
+            triggerSync()
+            
             showSnackbar(
                 SnackbarData(
                     message = "\"${snippet.title}\" deleted",
@@ -228,6 +234,10 @@ class SnippetListViewModel(
     private suspend fun restoreSnippet(snippetId: String) {
         val snippet = deletedSnippets.remove(snippetId) ?: return
         snippetRepository.create(snippet)
+        
+        // Trigger sync after restore
+        triggerSync()
+        
         showSnackbar(SnackbarData("Snippet restored"))
     }
 
@@ -269,6 +279,10 @@ class SnippetListViewModel(
                 // Refresh the list to show new snippet
                 loadSnippets()
                 _createState.value = CreateSnippetState.Created
+                
+                // Trigger sync after create
+                triggerSync()
+                
                 showSnackbar(SnackbarData("Snippet created"))
             } catch (e: Exception) {
                 _createState.value = CreateSnippetState.Error(e.message ?: "Failed to create snippet")
@@ -304,6 +318,10 @@ class SnippetListViewModel(
                 // Refresh the list to show updated content
                 loadSnippets()
                 Log.d("SnippetListViewModel", "Snippet list refreshed")
+                
+                // Trigger sync after update
+                triggerSync()
+                
                 showSnackbar(SnackbarData("Snippet saved"))
             } catch (e: Exception) {
                 Log.e("SnippetListViewModel", "Failed to update snippet", e)
@@ -365,13 +383,31 @@ class SnippetListViewModel(
     fun clearCreateState() {
         _createState.value = CreateSnippetState.Idle
     }
+
+    /**
+     * Triggers sync in the background
+     * Only syncs if the sync engine is in a valid state for syncing
+     */
+    private fun triggerSync() {
+        viewModelScope.launch {
+            try {
+                Log.d("SnippetListViewModel", "Triggering sync...")
+                syncEngine.sync()
+                Log.d("SnippetListViewModel", "Sync completed successfully")
+            } catch (e: Exception) {
+                Log.w("SnippetListViewModel", "Sync failed: ${e.message}")
+                // Don't show error to user for background sync - it's not critical
+            }
+        }
+    }
 }
 
 class SnippetListViewModelFactory(
     private val snippetRepository: SnippetRepository,
     private val folderRepository: FolderRepository,
     private val storageService: FileStorageService,
-    private val clipboardManager: ClipboardManager
+    private val clipboardManager: ClipboardManager,
+    private val syncEngine: SyncEngine
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         @Suppress("UNCHECKED_CAST")
@@ -379,7 +415,8 @@ class SnippetListViewModelFactory(
             snippetRepository = snippetRepository,
             folderRepository = folderRepository,
             storageService = storageService,
-            clipboardManager = clipboardManager
+            clipboardManager = clipboardManager,
+            syncEngine = syncEngine
         ) as T
     }
 }
