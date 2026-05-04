@@ -11,6 +11,9 @@ import com.darknote.core.storage.FileStorageService
 import com.darknote.desktop.ui.tree.TreeItem
 import com.darknote.desktop.ui.tree.TreeItemNode
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -19,9 +22,9 @@ import java.util.UUID
 class SnippetTreeViewModel(
     private val snippetRepository: SnippetRepository,
     private val folderRepository: FolderRepository,
-    private val fileStorageService: FileStorageService,
-    private val scope: CoroutineScope
+    private val fileStorageService: FileStorageService
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     
     // Repository data - Folders (mutable state for UI updates)
     private val _folders = mutableStateOf<List<Folder>>(emptyList())

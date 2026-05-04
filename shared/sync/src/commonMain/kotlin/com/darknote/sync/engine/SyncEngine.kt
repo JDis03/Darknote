@@ -125,9 +125,18 @@ class SyncEngine(
      * Detect changes in remote files since last sync.
      */
     private suspend fun detectRemoteChanges(): List<RemoteChange> {
-        val result = dropboxClient.listFiles("/")
+        // Use /darknote folder specifically for our app
+        val result = dropboxClient.listFiles("/darknote")
+        
         if (result.isFailure) {
-            throw SyncException("Failed to list remote files: ${result.exceptionOrNull()?.message}")
+            val error = result.exceptionOrNull()
+            // If folder doesn't exist, that's OK - just means no remote files yet
+            if (error?.message?.contains("not_found") == true || 
+                error?.message?.contains("path/not_found") == true) {
+                addLog("Remote folder /darknote doesn't exist yet - will be created on first upload", SyncLogType.INFO)
+                return emptyList()
+            }
+            throw SyncException("Failed to list remote files: ${error?.message}")
         }
         
         val remoteFiles = result.getOrThrow()

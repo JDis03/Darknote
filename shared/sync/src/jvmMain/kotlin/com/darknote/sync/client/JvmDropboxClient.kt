@@ -95,7 +95,19 @@ class JvmDropboxClient(
                 Result.success(files)
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            // Check if it's a "folder not found" error
+            if (e.message?.contains("path/not_found") == true || 
+                e.message?.contains("not_found") == true) {
+                // Create the folder and return empty list
+                try {
+                    currentClient.files().createFolderV2(path)
+                    Result.success(emptyList())
+                } catch (createError: Exception) {
+                    Result.failure(Exception("Folder doesn't exist and couldn't create it: ${createError.message}"))
+                }
+            } else {
+                Result.failure(e)
+            }
         }
     }
 

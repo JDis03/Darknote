@@ -78,8 +78,7 @@ fun MainScreen() {
         SnippetTreeViewModel(
             snippetRepository = databaseFactory.snippetRepository,
             folderRepository = databaseFactory.folderRepository,
-            fileStorageService = storageService,
-            scope = scope
+            fileStorageService = storageService
         )
     }
     
@@ -110,7 +109,6 @@ fun MainScreen() {
     val watcherSync = remember {
         WatcherSync(
             syncEngine = syncEngine,
-            scope = scope,
             snippetsDir = File(System.getProperty("user.home"), ".config/darknote/snippets")
         )
     }
@@ -146,15 +144,15 @@ fun MainScreen() {
     
     // Periodic retry when in Error state
     LaunchedEffect(syncState) {
-        while (true) {
-            if (syncState is SyncState.Error) {
-                delay(30_000L) // Retry every 30 seconds
-                if (dropboxClient.isAuthorized()) {
-                    println("[Main] Periodic retry: attempting sync after error...")
+        if (syncState is SyncState.Error) {
+            delay(30_000L) // Retry after 30 seconds
+            if (dropboxClient.isAuthorized()) {
+                println("[Main] Periodic retry: attempting sync after error...")
+                try {
                     syncEngine.sync()
+                } catch (e: Exception) {
+                    println("[Main] Auto-retry failed: ${e.message}")
                 }
-            } else {
-                break // Stop looping when state is not Error
             }
         }
     }
@@ -243,7 +241,11 @@ fun MainScreen() {
                     isModified = false
                     viewModel.updateSnippetContent(snippet.id, editorContent)
                     if (dropboxClient.isAuthorized()) {
-                        syncEngine.sync()
+                        try {
+                            syncEngine.sync()
+                        } catch (e: Exception) {
+                            println("[Main] Sync after save failed: ${e.message}")
+                        }
                     }
                 } else {
                     saveStatus = SaveStatus.Error
