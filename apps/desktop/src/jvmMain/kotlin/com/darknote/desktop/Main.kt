@@ -22,6 +22,8 @@ import com.darknote.core.storage.FileStorageService
 import com.darknote.core.data.DemoDataInitializer
 import com.darknote.desktop.ui.tree.*
 import com.darknote.desktop.ui.dialogs.RenameDialog
+import com.darknote.desktop.ui.editor.ViewManager
+import com.darknote.desktop.ui.editor.SaveStatus as EditorSaveStatus
 import com.darknote.desktop.ui.screens.SettingsScreen
 import com.darknote.desktop.viewmodel.SnippetTreeViewModel
 import com.darknote.desktop.viewmodel.AuthState
@@ -35,13 +37,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
-// Save status enum
-sealed class SaveStatus {
-    object Idle : SaveStatus()
-    object Saving : SaveStatus()
-    object Saved : SaveStatus()
-    object Error : SaveStatus()
-}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 fun main() = application {
@@ -200,7 +196,7 @@ fun MainScreen() {
     var editorContent by remember { mutableStateOf("") }
     var originalContent by remember { mutableStateOf("") }
     var isModified by remember { mutableStateOf(false) }
-    var saveStatus by remember { mutableStateOf<SaveStatus>(SaveStatus.Idle as SaveStatus) }
+    var saveStatus by remember { mutableStateOf<EditorSaveStatus>(EditorSaveStatus.Idle) }
     
     // Dialog states
     var showRenameDialog by remember { mutableStateOf(false) }
@@ -225,7 +221,7 @@ fun MainScreen() {
             editorContent = content
             originalContent = content
             isModified = false
-            saveStatus = SaveStatus.Idle
+            saveStatus = EditorSaveStatus.Idle
         } ?: run {
             editorContent = ""
             originalContent = ""
@@ -238,17 +234,17 @@ fun MainScreen() {
         if (isModified && editorContent != originalContent) {
             delay(2000) // 2 seconds auto-save
             selectedSnippet?.let { snippet ->
-                saveStatus = SaveStatus.Saving
+                saveStatus = EditorSaveStatus.Saving
                 scope.launch {
                     val updatedSnippet = snippet.copy(content = editorContent)
                     val result = storageService.saveSnippetContent(updatedSnippet)
                     if (result.isSuccess) {
-                        saveStatus = SaveStatus.Saved
+                        saveStatus = EditorSaveStatus.Saved
                         originalContent = editorContent
                         isModified = false
                         viewModel.updateSnippetContent(snippet.id, editorContent)
                     } else {
-                        saveStatus = SaveStatus.Error
+                        saveStatus = EditorSaveStatus.Error
                     }
                 }
             }
@@ -258,12 +254,12 @@ fun MainScreen() {
     // Save action (reused by Ctrl+S and Save button)
     fun performSave() {
         selectedSnippet?.let { snippet ->
-            saveStatus = SaveStatus.Saving
+            saveStatus = EditorSaveStatus.Saving
             scope.launch {
                 val updatedSnippet = snippet.copy(content = editorContent)
                 val result = storageService.saveSnippetContent(updatedSnippet)
                 if (result.isSuccess) {
-                    saveStatus = SaveStatus.Saved
+                    saveStatus = EditorSaveStatus.Saved
                     originalContent = editorContent
                     isModified = false
                     viewModel.updateSnippetContent(snippet.id, editorContent)
@@ -275,7 +271,7 @@ fun MainScreen() {
                         }
                     }
                 } else {
-                    saveStatus = SaveStatus.Error
+                    saveStatus = EditorSaveStatus.Error
                 }
             }
         }
@@ -379,16 +375,16 @@ fun MainScreen() {
                         
                         // Save status indicator
                         when (saveStatus) {
-                            is SaveStatus.Saving -> CircularProgressIndicator(
+                            EditorSaveStatus.Saving -> CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp
                             )
-                            is SaveStatus.Saved -> Icon(
+                            EditorSaveStatus.Saved -> Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = "Saved",
                                 tint = MaterialTheme.colorScheme.primary
                             )
-                            is SaveStatus.Error -> Icon(
+                            EditorSaveStatus.Error -> Icon(
                                 imageVector = Icons.Default.Error,
                                 contentDescription = "Error",
                                 tint = MaterialTheme.colorScheme.error
@@ -514,107 +510,30 @@ fun MainScreen() {
                 color = MaterialTheme.colorScheme.outlineVariant
             )
             
-            // Editor Area
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .padding(16.dp)
-            ) {
-                if (selectedSnippet != null) {
-                    // Title
-                    Text(
-                        text = selectedSnippet.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    
-                    // Editor
-                    OutlinedTextField(
-                        value = editorContent,
-                        onValueChange = { 
-                            editorContent = it
-                            isModified = it != originalContent
-                            saveStatus = SaveStatus.Idle
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .onFocusChanged { focusState ->
-                                isEditorFocused = focusState.isFocused
-                            },
-                        textStyle = MaterialTheme.typography.bodyMedium,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surface,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                        )
-                    )
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    // Action buttons
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                clipboardManager.copy(editorContent, sanitize = true)
-                            }
-                        ) {
-                            Text("Copy Sanitized")
-                        }
-                        
-                        OutlinedButton(
-                            onClick = {
-                                clipboardManager.copy(editorContent, sanitize = false)
-                            }
-                        ) {
-                            Text("Copy Raw")
-                        }
-                        
-                        Spacer(modifier = Modifier.weight(1f))
-                        
-                        // Status text
-                        Text(
-                            text = when (saveStatus) {
-                                is SaveStatus.Saving -> "Saving..."
-                                is SaveStatus.Saved -> "Saved"
-                                is SaveStatus.Error -> "Error saving"
-                                else -> if (isModified) "Modified" else ""
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = when (saveStatus) {
-                                is SaveStatus.Saved -> MaterialTheme.colorScheme.primary
-                                is SaveStatus.Error -> MaterialTheme.colorScheme.error
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                        )
-                    }
-                } else {
-                    // Empty state
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Text(
-                                "Select a snippet from the sidebar",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                "Or create a new one using + button",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-                }
-            }
+            // Kate-style ViewManager with tabs and splits
+            ViewManager(
+                snippet = selectedSnippet,
+                content = editorContent,
+                onContentChange = { 
+                    editorContent = it
+                    isModified = it != originalContent
+                    saveStatus = EditorSaveStatus.Idle
+                },
+                isModified = isModified,
+                saveStatus = saveStatus,
+                onCopy = {
+                    clipboardManager.copy(editorContent, sanitize = true)
+                },
+                onCopyRaw = {
+                    clipboardManager.copy(editorContent, sanitize = false)
+                },
+                onSave = { performSave() },
+                onFocusChanged = { isEditorFocused = it },
+                onSplitHorizontal = { /* TODO: Handle split actions */ },
+                onSplitVertical = { /* TODO: Handle split actions */ },
+                onCloseSplit = { /* TODO: Handle close split */ },
+                modifier = Modifier.weight(1f)
+            )
         }
         
         // Rename dialog
