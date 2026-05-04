@@ -20,6 +20,15 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 
 /**
+ * Token response data class for parsing Dropbox API response
+ */
+private data class TokenResponse(
+    val access_token: String,
+    val token_type: String,
+    val refresh_token: String? = null
+)
+
+/**
  * Android implementation of DropboxClient using official SDK.
  * Uses SharedPreferences for credential storage and CustomTabs for OAuth.
  */
@@ -36,7 +45,6 @@ class AndroidDropboxClient(
     private val prefs: SharedPreferences = context.getSharedPreferences("dropbox_auth", Context.MODE_PRIVATE)
 
     private var client: DbxClientV2? = null
-    private var pkceWebAuth: DbxPKCEWebAuth? = null
 
     init {
         loadClient()
@@ -45,40 +53,26 @@ class AndroidDropboxClient(
     override fun isAuthorized(): Boolean = client != null
 
     override fun getAuthUrl(): String {
-        val appInfo = DbxAppInfo(appKey)
-        
-        // Use PKCE for Android (more secure for mobile apps)
-        pkceWebAuth = DbxPKCEWebAuth(config, appInfo)
-        
-        val authRequest = com.dropbox.core.DbxWebAuth.newRequestBuilder()
-            .withRedirectUri("db-$appKey://auth", null) // Custom scheme allowed with PKCE
-            .withTokenAccessType(com.dropbox.core.TokenAccessType.OFFLINE)
-            .build()
-            
-        return pkceWebAuth!!.authorize(authRequest)
+        // Follow Joplin's simple approach - no redirect URI, user copies code manually
+        return "https://www.dropbox.com/oauth2/authorize?" +
+                "response_type=code&" +
+                "client_id=$appKey"
     }
 
     override suspend fun finishAuth(code: String): Result<Unit> {
         return try {
             withContext(Dispatchers.IO) {
-                val pkceAuth = pkceWebAuth ?: return@withContext Result.failure<Unit>(
-                    IllegalStateException("PKCE auth not initialized. Call getAuthUrl() first.")
-                )
+                // Follow Joplin's approach - direct token exchange
+                val response = executeTokenExchange(code)
                 
-                // Use PKCE to finish auth
-                val authFinish = pkceAuth.finishFromCode(code)
-
                 val credential = DbxCredential(
-                    authFinish.accessToken,
-                    authFinish.expiresAt,
-                    authFinish.refreshToken,
+                    response.access_token,
+                    null, // Long-lived token, no expiration
+                    response.refresh_token,
                     appKey
                 )
-
-                // Save credentials
-                saveCredentials(credential)
                 
-                // Create client
+                saveCredentials(credential)
                 client = DbxClientV2(config, credential)
                 
                 Result.success(Unit)
@@ -86,6 +80,49 @@ class AndroidDropboxClient(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+    
+    private suspend fun executeTokenExchange(authCode: String): TokenResponse {
+        val tokenUrl = "https://api.dropboxapi.com/oauth2/token"
+        
+        val formBody = okhttp3.FormBody.Builder()
+            .add("code", authCode)
+            .add("grant_type", "authorization_code")
+            .add("client_id", appKey)
+            // Note: No client_secret needed for public app
+            .build()
+        
+        val request = okhttp3.Request.Builder()
+            .url(tokenUrl)
+            .post(formBody)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .build()
+        
+        val okHttpClient = okhttp3.OkHttpClient()
+        val response = okHttpClient.newCall(request).execute()
+        
+        val responseBody = response.body?.string()
+        
+        if (!response.isSuccessful) {
+            throw Exception("Token exchange failed: ${response.code} - $responseBody")
+        }
+        
+        return parseTokenResponse(responseBody!!)
+    }
+    
+    private fun parseTokenResponse(json: String): TokenResponse {
+        // Simple JSON parsing following Joplin's approach
+        val accessToken = extractJsonField(json, "access_token")
+            ?: throw Exception("No access_token in response")
+        val refreshToken = extractJsonField(json, "refresh_token")
+        val tokenType = extractJsonField(json, "token_type") ?: "bearer"
+        
+        return TokenResponse(accessToken, tokenType, refreshToken)
+    }
+    
+    private fun extractJsonField(json: String, fieldName: String): String? {
+        val pattern = "\"$fieldName\"\\s*:\\s*\"([^\"]+)\"".toRegex()
+        return pattern.find(json)?.groupValues?.get(1)
     }
 
     override suspend fun listFiles(path: String): Result<List<RemoteFile>> {

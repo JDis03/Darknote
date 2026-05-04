@@ -68,7 +68,7 @@ class SyncMetadataRepositoryImpl(
                     usage_count = 0, // Default value
                     last_copied_at = null,
                     dropbox_rev = metadata.remoteRevision,
-                    local_hash = null,
+                    local_hash = "", // NOT NULL field, use empty string
                     last_sync_at = metadata.lastSyncTime,
                     conflict_status = when (metadata.syncStatus) {
                         SyncStatus.SYNCED -> null
@@ -134,7 +134,7 @@ class SyncMetadataRepositoryImpl(
                         usage_count = existing.usage_count ?: 0,
                         last_copied_at = existing.last_copied_at,
                         dropbox_rev = revision,
-                        local_hash = existing.local_hash,
+                        local_hash = existing.local_hash ?: "", // Handle nullable field
                         last_sync_at = existing.last_sync_at,
                         conflict_status = existing.conflict_status
                     )
@@ -158,7 +158,7 @@ class SyncMetadataRepositoryImpl(
                         usage_count = existing.usage_count ?: 0,
                         last_copied_at = existing.last_copied_at,
                         dropbox_rev = existing.dropbox_rev,
-                        local_hash = existing.local_hash,
+                        local_hash = existing.local_hash ?: "", // Handle nullable field
                         last_sync_at = timestamp,
                         conflict_status = existing.conflict_status
                     )

@@ -1,7 +1,5 @@
 package com.darknote.android
 
-import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -27,8 +25,6 @@ import java.io.File
 
 class MainActivity : ComponentActivity() {
     
-    private lateinit var authViewModel: AuthViewModel
-    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -51,7 +47,7 @@ class MainActivity : ComponentActivity() {
             clipboardManager = clipboardManager
         )
 
-        authViewModel = AuthViewModel(
+        val authViewModel = AuthViewModel(
             dropboxClient = DropboxClientFactory.create()
         )
 
@@ -78,22 +74,5 @@ class MainActivity : ComponentActivity() {
             }
         }
         
-        // Handle OAuth callback if this is from a redirect
-        handleOAuthCallback(intent)
-    }
-    
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        handleOAuthCallback(intent)
-    }
-    
-    private fun handleOAuthCallback(intent: Intent) {
-        val data: Uri? = intent.data
-        if (data != null && data.scheme == "db-97rske3f4p28pex") {
-            val code = data.getQueryParameter("code")
-            if (code != null) {
-                authViewModel.completeAuth(code)
-            }
-        }
     }
 }

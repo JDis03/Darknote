@@ -61,8 +61,7 @@ class WatcherSync(
                     try {
                         val result = syncEngine.sync()
                         if (result.isSuccess) {
-                            val syncResult = result.getOrNull()
-                            println("[WatcherSync] Auto-sync completed: uploaded=${syncResult?.uploaded}, downloaded=${syncResult?.downloaded}")
+                            println("[WatcherSync] Auto-sync completed successfully")
                         } else {
                             println("[WatcherSync] Auto-sync failed: ${result.exceptionOrNull()?.message}")
                         }
