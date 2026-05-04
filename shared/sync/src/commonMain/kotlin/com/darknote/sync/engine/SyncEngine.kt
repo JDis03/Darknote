@@ -63,10 +63,11 @@ class SyncEngine(
                 addLog("Detecting local and remote changes...", SyncLogType.INFO)
                 _progress.value = SyncProgress(1, 6, "Detecting changes...")
 
+                val remoteFiles = listRemoteFiles()
                 val localChanges = detectLocalChanges()
-                val remoteChanges = detectRemoteChanges()
+                val remoteChanges = detectRemoteChanges(remoteFiles)
                 val localDeletions = detectLocalDeletions()
-                val remoteDeletions = detectRemoteDeletions(remoteChanges)
+                val remoteDeletions = detectRemoteDeletions(remoteFiles)
 
                 addLog("Found ${localChanges.size} local changes, ${remoteChanges.size} remote changes", SyncLogType.INFO)
                 addLog("Found ${localDeletions.size} local deletions, ${remoteDeletions.size} remote deletions", SyncLogType.INFO)
@@ -84,7 +85,7 @@ class SyncEngine(
                 _progress.value = SyncProgress(4, 6, "Uploading changes...")
                 uploadChanges(resolvedChanges.toUpload)
 
-                // Step 6: Download remote changes  
+                // Step 6: Download remote changes
                 _progress.value = SyncProgress(5, 6, "Downloading changes...")
                 downloadChanges(resolvedChanges.toDownload)
 
@@ -155,8 +156,8 @@ class SyncEngine(
         }
     }
 
-    private suspend fun detectRemoteDeletions(remoteChanges: List<RemoteChange>): List<String> {
-        val remotePaths = remoteChanges.map { it.file.path }.toSet()
+    private suspend fun detectRemoteDeletions(remoteFiles: List<RemoteFile>): List<String> {
+        val remotePaths = remoteFiles.map { "/darknote/${extractSnippetIdFromPath(it.path)}.txt" }.toSet()
 
         val allMetadata = syncMetadataRepository.getAll()
         val deletions = mutableListOf<String>()
@@ -190,47 +191,47 @@ class SyncEngine(
     }
     
     /**
-     * Detect changes in remote files since last sync.
+     * List all remote .txt files in /darknote folder.
      */
-    private suspend fun detectRemoteChanges(): List<RemoteChange> {
-        // Use /darknote folder specifically for our app
+    private suspend fun listRemoteFiles(): List<RemoteFile> {
         val result = dropboxClient.listFiles("/darknote")
-        
+
         if (result.isFailure) {
             val error = result.exceptionOrNull()
-            // If folder doesn't exist, that's OK - just means no remote files yet
-            if (error?.message?.contains("not_found") == true || 
+            if (error?.message?.contains("not_found") == true ||
                 error?.message?.contains("path/not_found") == true) {
-                addLog("Remote folder /darknote doesn't exist yet - will be created on first upload", SyncLogType.INFO)
+                addLog("Remote folder /darknote doesn't exist yet", SyncLogType.INFO)
                 return emptyList()
             }
             throw SyncException("Failed to list remote files: ${error?.message}")
         }
-        
-        val remoteFiles = result.getOrThrow()
+
+        return result.getOrThrow().filter { it.name.endsWith(".txt") }
+    }
+
+    /**
+     * Detect changes in remote files since last sync.
+     */
+    private suspend fun detectRemoteChanges(remoteFiles: List<RemoteFile>): List<RemoteChange> {
         val changes = mutableListOf<RemoteChange>()
-        
+
         for (remoteFile in remoteFiles) {
-            if (!remoteFile.name.endsWith(".txt")) continue // Only sync .txt files
-            
             val snippetId = extractSnippetIdFromPath(remoteFile.path)
             val localSnippet = snippetRepository.getByIdCached(snippetId)
             val syncMetadata = syncMetadataRepository.getBySnippetId(snippetId)
-            
+
             when {
                 localSnippet == null -> {
-                    // New remote file - needs to be downloaded
                     changes.add(RemoteChange.Created(remoteFile))
                     addLog("Remote create: ${remoteFile.name}", SyncLogType.INFO)
                 }
                 syncMetadata?.remoteRevision != extractRevisionFromFile(remoteFile) -> {
-                    // Modified remote file - needs to be downloaded
                     changes.add(RemoteChange.Updated(remoteFile, localSnippet))
                     addLog("Remote update: ${remoteFile.name}", SyncLogType.INFO)
                 }
             }
         }
-        
+
         return changes
     }
     
