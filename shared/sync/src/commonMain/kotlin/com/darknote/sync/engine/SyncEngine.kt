@@ -61,27 +61,35 @@ class SyncEngine(
             try {
                 // Step 3: Detect changes
                 addLog("Detecting local and remote changes...", SyncLogType.INFO)
-                _progress.value = SyncProgress(1, 5, "Detecting changes...")
-                
+                _progress.value = SyncProgress(1, 6, "Detecting changes...")
+
                 val localChanges = detectLocalChanges()
                 val remoteChanges = detectRemoteChanges()
-                
+                val localDeletions = detectLocalDeletions()
+                val remoteDeletions = detectRemoteDeletions(remoteChanges)
+
                 addLog("Found ${localChanges.size} local changes, ${remoteChanges.size} remote changes", SyncLogType.INFO)
-                
+                addLog("Found ${localDeletions.size} local deletions, ${remoteDeletions.size} remote deletions", SyncLogType.INFO)
+
+                // Step 3.5: Process deletions first
+                _progress.value = SyncProgress(2, 6, "Processing deletions...")
+                processLocalDeletions(localDeletions)
+                processRemoteDeletions(remoteDeletions)
+
                 // Step 4: Resolve conflicts
-                _progress.value = SyncProgress(2, 5, "Resolving conflicts...")
+                _progress.value = SyncProgress(3, 6, "Resolving conflicts...")
                 val resolvedChanges = resolveConflicts(localChanges, remoteChanges)
-                
+
                 // Step 5: Upload local changes
-                _progress.value = SyncProgress(3, 5, "Uploading changes...")
+                _progress.value = SyncProgress(4, 6, "Uploading changes...")
                 uploadChanges(resolvedChanges.toUpload)
-                
+
                 // Step 6: Download remote changes  
-                _progress.value = SyncProgress(4, 5, "Downloading changes...")
+                _progress.value = SyncProgress(5, 6, "Downloading changes...")
                 downloadChanges(resolvedChanges.toDownload)
-                
+
                 // Step 7: Complete
-                _progress.value = SyncProgress(5, 5, "Complete")
+                _progress.value = SyncProgress(6, 6, "Complete")
                 _state.value = SyncState.Synced
                 addLog("Synchronization completed successfully", SyncLogType.SUCCESS)
                 
@@ -103,25 +111,82 @@ class SyncEngine(
     private suspend fun detectLocalChanges(): List<LocalChange> {
         val allSnippets = snippetRepository.getAllCached()
         val changes = mutableListOf<LocalChange>()
-        
+
         for (snippet in allSnippets) {
             val syncMetadata = syncMetadataRepository.getBySnippetId(snippet.id)
-            
+
             when {
                 syncMetadata == null -> {
-                    // New snippet - needs to be uploaded
                     changes.add(LocalChange.Created(snippet))
                     addLog("Local create: ${snippet.title}", SyncLogType.INFO)
                 }
                 snippet.modifiedAt > syncMetadata.lastSyncTime -> {
-                    // Modified snippet - needs to be uploaded
                     changes.add(LocalChange.Updated(snippet))
                     addLog("Local update: ${snippet.title}", SyncLogType.INFO)
                 }
             }
         }
-        
+
         return changes
+    }
+
+    private suspend fun detectLocalDeletions(): List<String> {
+        val localIds = snippetRepository.getAllCached().map { it.id }.toSet()
+        val allMetadata = syncMetadataRepository.getAll()
+
+        return allMetadata
+            .filter { it.snippetId !in localIds }
+            .map { it.snippetId }
+            .also { deletedIds ->
+                deletedIds.forEach { addLog("Local deletion: $it", SyncLogType.INFO) }
+            }
+    }
+
+    private suspend fun processLocalDeletions(deletedIds: List<String>) {
+        for (id in deletedIds) {
+            try {
+                val remotePath = "/darknote/$id.txt"
+                dropboxClient.deleteFile(remotePath)
+                syncMetadataRepository.delete(id)
+                addLog("Deleted remote file for $id", SyncLogType.SUCCESS)
+            } catch (e: Exception) {
+                addLog("Failed to delete remote file for $id: ${e.message}", SyncLogType.WARNING)
+            }
+        }
+    }
+
+    private suspend fun detectRemoteDeletions(remoteChanges: List<RemoteChange>): List<String> {
+        val remotePaths = remoteChanges.map { it.file.path }.toSet()
+
+        val allMetadata = syncMetadataRepository.getAll()
+        val deletions = mutableListOf<String>()
+
+        for (meta in allMetadata) {
+            val expectedPath = "/darknote/${meta.snippetId}.txt"
+            if (expectedPath !in remotePaths) {
+                val snippet = snippetRepository.getByIdCached(meta.snippetId)
+                if (snippet != null) {
+                    deletions.add(meta.snippetId)
+                    addLog("Remote deletion: ${snippet.title}", SyncLogType.INFO)
+                }
+            }
+        }
+
+        return deletions
+    }
+
+    private suspend fun processRemoteDeletions(deletedIds: List<String>) {
+        for (id in deletedIds) {
+            try {
+                val snippet = snippetRepository.getByIdCached(id) ?: continue
+                storageService.deleteSnippetFile(snippet.localPath)
+                snippetRepository.delete(id)
+                syncMetadataRepository.delete(id)
+                addLog("Deleted local snippet: ${snippet.title} (removed remotely)", SyncLogType.SUCCESS)
+            } catch (e: Exception) {
+                addLog("Failed to process remote deletion for $id: ${e.message}", SyncLogType.WARNING)
+            }
+        }
     }
     
     /**
