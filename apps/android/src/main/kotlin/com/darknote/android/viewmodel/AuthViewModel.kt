@@ -82,10 +82,17 @@ class AuthViewModel(
         viewModelScope.launch {
             try {
                 _authState.value = AuthState.Authorizing
-                addLog("Completing authentication...", LogType.INFO)
+                addLog("Starting token exchange with code: ${code.take(10)}...", LogType.INFO)
                 
-                val result = dropboxClient.finishAuth(code)
-                if (result.isSuccess) {
+                // Add timeout handling
+                val result = kotlinx.coroutines.withTimeoutOrNull(60000) { // 60 second timeout
+                    dropboxClient.finishAuth(code)
+                }
+                
+                if (result == null) {
+                    _authState.value = AuthState.Error("Authentication timed out")
+                    addLog("Authentication timed out after 60 seconds", LogType.ERROR)
+                } else if (result.isSuccess) {
                     _authState.value = AuthState.Authenticated
                     addLog("Authentication successful!", LogType.SUCCESS)
                 } else {

@@ -34,7 +34,8 @@ private data class TokenResponse(
  */
 class AndroidDropboxClient(
     private val context: Context,
-    private val appKey: String
+    private val appKey: String,
+    private val appSecret: String? = null // Optional for public apps
 ) : DropboxClient {
 
     private val config = DbxRequestConfig.newBuilder("darknote-android/1.0")
@@ -62,8 +63,12 @@ class AndroidDropboxClient(
     override suspend fun finishAuth(code: String): Result<Unit> {
         return try {
             withContext(Dispatchers.IO) {
+                println("[AndroidDropboxClient] Starting token exchange for code: ${code.take(10)}...")
+                
                 // Follow Joplin's approach - direct token exchange
                 val response = executeTokenExchange(code)
+                
+                println("[AndroidDropboxClient] Token exchange successful, access_token: ${response.access_token.take(10)}...")
                 
                 val credential = DbxCredential(
                     response.access_token,
@@ -75,9 +80,12 @@ class AndroidDropboxClient(
                 saveCredentials(credential)
                 client = DbxClientV2(config, credential)
                 
+                println("[AndroidDropboxClient] Auth completed successfully")
                 Result.success(Unit)
             }
         } catch (e: Exception) {
+            println("[AndroidDropboxClient] finishAuth failed: ${e.message}")
+            e.printStackTrace()
             Result.failure(e)
         }
     }
@@ -85,12 +93,23 @@ class AndroidDropboxClient(
     private suspend fun executeTokenExchange(authCode: String): TokenResponse {
         val tokenUrl = "https://api.dropboxapi.com/oauth2/token"
         
-        val formBody = okhttp3.FormBody.Builder()
+        println("[AndroidDropboxClient] Executing token exchange to: $tokenUrl")
+        println("[AndroidDropboxClient] Auth code: ${authCode.take(10)}...")
+        
+        val formBodyBuilder = okhttp3.FormBody.Builder()
             .add("code", authCode)
             .add("grant_type", "authorization_code")
             .add("client_id", appKey)
-            // Note: No client_secret needed for public app
-            .build()
+            
+        // Add client_secret if available (following Joplin's approach)
+        if (appSecret != null) {
+            formBodyBuilder.add("client_secret", appSecret)
+            println("[AndroidDropboxClient] Using client_secret: ${appSecret.take(5)}...")
+        } else {
+            println("[AndroidDropboxClient] No client_secret provided (public app)")
+        }
+        
+        val formBody = formBodyBuilder.build()
         
         val request = okhttp3.Request.Builder()
             .url(tokenUrl)
@@ -98,10 +117,20 @@ class AndroidDropboxClient(
             .header("Content-Type", "application/x-www-form-urlencoded")
             .build()
         
-        val okHttpClient = okhttp3.OkHttpClient()
+        println("[AndroidDropboxClient] Making HTTP request...")
+        
+        val okHttpClient = okhttp3.OkHttpClient.Builder()
+            .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+            
         val response = okHttpClient.newCall(request).execute()
         
         val responseBody = response.body?.string()
+        
+        println("[AndroidDropboxClient] HTTP Response: ${response.code}")
+        println("[AndroidDropboxClient] Response body: ${responseBody?.take(200)}...")
         
         if (!response.isSuccessful) {
             throw Exception("Token exchange failed: ${response.code} - $responseBody")
