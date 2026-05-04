@@ -34,7 +34,9 @@ class MainActivity : ComponentActivity() {
         DropboxClientFactory.initialize(this)
 
         val storageDir = File(filesDir, "snippets").apply { mkdirs() }
-        val storageService = FileStorageService(storageDir)
+        // NOTE: baseDirectory must NOT include "snippets" — the path
+        // from generateSafePath already includes that prefix.
+        val storageService = FileStorageService(filesDir)
         val databaseFactory = DatabaseFactory(AndroidDriverFactory(this))
         val clipboardManager = AndroidClipboardManager(
             ClipboardSanitizer(ClipboardSettings.DEFAULT),

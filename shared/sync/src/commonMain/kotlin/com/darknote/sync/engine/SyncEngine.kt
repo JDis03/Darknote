@@ -350,13 +350,15 @@ class SyncEngine(
 
     private suspend fun createTempFile(snippet: Snippet): java.io.File {
         val tempFile = kotlin.io.path.createTempFile().toFile()
+        val actualContent = storageService.loadSnippetContent(snippet.localPath)
+            .getOrDefault(snippet.content)
         val folderName = snippet.folderId?.let { fid ->
             folderRepository.getById(fid)?.name
         }
         val fileFormat = SnippetFileFormat(
             id = snippet.id,
             title = snippet.title,
-            content = snippet.content,
+            content = actualContent,
             folderId = snippet.folderId,
             folderName = folderName,
             tags = snippet.tags,

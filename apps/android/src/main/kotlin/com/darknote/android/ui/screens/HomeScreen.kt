@@ -53,14 +53,12 @@ import com.darknote.android.CreateSnippetState
 import com.darknote.android.SnackbarData
 import com.darknote.android.SnippetListViewModel
 import com.darknote.android.ui.components.CreateSnippetSheet
-import com.darknote.android.ui.components.EditSnippetSheet
 import com.darknote.android.ui.components.EmptyStateView
 import com.darknote.android.ui.components.CreateSnippetFab
 import com.darknote.android.ui.components.FilterBar
 import com.darknote.android.ui.components.SearchBar
 import com.darknote.android.ui.components.SnippetCard
 import com.darknote.android.ui.components.SnippetContextMenu
-import com.darknote.android.ui.components.SnippetDetailSheet
 import com.darknote.android.ui.components.SwipeToDismissBox
 import com.darknote.core.model.Snippet
 
@@ -69,6 +67,7 @@ import com.darknote.core.model.Snippet
 fun HomeScreen(
     viewModel: SnippetListViewModel,
     onNavigateToSettings: () -> Unit,
+    onNavigateToEditor: (snippetId: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val snippets by viewModel.filteredSnippets.collectAsState()
@@ -88,8 +87,7 @@ fun HomeScreen(
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
     var showCreateSheet by remember { mutableStateOf(false) }
-    var showDetailSnippet by remember { mutableStateOf<Snippet?>(null) }
-    var editSnippet by remember { mutableStateOf<Snippet?>(null) }
+    val editSnippet by remember { mutableStateOf<Snippet?>(null) }
     val scope = rememberCoroutineScope()
     var contextMenuSnippet by remember { mutableStateOf<Snippet?>(null) }
     var showContextMenu by remember { mutableStateOf(false) }
@@ -213,7 +211,7 @@ fun HomeScreen(
                                     isCopied = isCopied,
                                     onCopy = { viewModel.copySnippet(snippet) },
                                     onToggleFavorite = { viewModel.toggleFavorite(snippet) },
-                                    onClick = { showDetailSnippet = snippet },
+                                    onClick = { onNavigateToEditor(snippet.id) },
                                     onLongClick = {
                                         contextMenuSnippet = snippet
                                         showContextMenu = true
@@ -244,10 +242,7 @@ fun HomeScreen(
                     isFavorite = snippet.isFavorite,
                     onEdit = {
                         showContextMenu = false
-                        scope.launch {
-                            val snippetWithContent = viewModel.loadSnippetWithContent(snippet)
-                            editSnippet = snippetWithContent
-                        }
+                        onNavigateToEditor(snippet.id)
                     },
                     onCopy = {
                         showContextMenu = false
@@ -274,30 +269,6 @@ fun HomeScreen(
         }
     }
 
-    val detailSnippet = showDetailSnippet
-    if (detailSnippet != null) {
-        val folderName = folders.find { it.id == detailSnippet.folderId }?.name
-        SnippetDetailSheet(
-            snippet = detailSnippet,
-            onDismiss = { showDetailSnippet = null },
-            onEdit = { snippet ->
-                scope.launch {
-                    val snippetWithContent = viewModel.loadSnippetWithContent(snippet)
-                    editSnippet = snippetWithContent
-                }
-            },
-            onCopy = { viewModel.copySnippet(it) },
-            onCopyRaw = { viewModel.copyRawSnippet(it) },
-            onToggleFavorite = { viewModel.toggleFavorite(it) },
-            onDelete = { s ->
-                viewModel.deleteSnippet(s)
-                showDetailSnippet = null
-            },
-            onShare = { viewModel.shareSnippet(it, context) },
-            folderName = folderName
-        )
-    }
-
     if (showCreateSheet) {
         CreateSnippetSheet(
             folders = folders,
@@ -307,19 +278,6 @@ fun HomeScreen(
             },
             onCreate = { title, content, language, tags, folderId ->
                 viewModel.createSnippet(title, content, language, tags, folderId)
-            }
-        )
-    }
-
-    val editing = editSnippet
-    if (editing != null) {
-        EditSnippetSheet(
-            snippet = editing,
-            folders = folders,
-            onDismiss = { editSnippet = null },
-            onSave = { s ->
-                viewModel.updateSnippet(s)
-                editSnippet = null
             }
         )
     }
