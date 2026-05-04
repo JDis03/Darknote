@@ -161,19 +161,14 @@ fun EditorScreen(
             )
         },
         bottomBar = {
-            // Obsidian-style bottom info bar
-            Surface(
-                tonalElevation = 1.dp,
-                color = MaterialTheme.colorScheme.surface
-            ) {
+            Surface(tonalElevation = 1.dp, color = MaterialTheme.colorScheme.surface) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Language badge
                     snippet.language?.let { lang ->
                         Surface(
                             shape = MaterialTheme.shapes.small,
@@ -183,26 +178,17 @@ fun EditorScreen(
                                 text = lang,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
-                    }
+                    } ?: Spacer(Modifier.width(1.dp))
 
-                    Spacer(Modifier.weight(1f))
-
-                    // Stats row
                     Text(
                         text = "$lines lines · $chars chars",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    snippet.language?.let {
-                        Spacer(Modifier.weight(1f))
-                        Spacer(Modifier.width(0.dp))
-                    }
-
-                    // Modified date
                     Text(
                         text = dateFormat.format(Date(snippet.modifiedAt)),
                         style = MaterialTheme.typography.bodySmall,
