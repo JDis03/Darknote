@@ -1,0 +1,53 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Background -->
+    <path
+        android:fillColor="#0D1117"
+        android:pathData="M0,0h108v108h-108z"/>
+    
+    <!-- Outer glow -->
+    <path
+        android:fillColor="#161B22"
+        android:pathData="M54,18 C54,18 38,18 38,54 C38,90 54,90 54,90 C54,90 70,90 70,54 C70,18 54,18 54,18 Z"/>
+    
+    <!-- Left code bracket -->
+    <path
+        android:fillColor="#58A6FF"
+        android:pathData="M28,30 L18,54 L28,78 L38,78 L28,54 L38,30 Z"/>
+    
+    <!-- Right code bracket -->
+    <path
+        android:fillColor="#58A6FF"
+        android:pathData="M80,30 L70,54 L80,78 L90,78 L80,54 L90,30 Z"/>
+    
+    <!-- Central document/note -->
+    <path
+        android:fillColor="#238636"
+        android:pathData="M40,25 L68,25 L68,70 L54,85 L40,70 Z"/>
+    
+    <!-- Note header -->
+    <path
+        android:fillColor="#2EA043"
+        android:pathData="M40,25 L68,25 L68,35 L40,35 Z"/>
+    
+    <!-- Note lines -->
+    <path
+        android:fillColor="#C9D1D9"
+        android:pathData="M45,42 L63,42 L63,45 L45,45 Z"/>
+    
+    <path
+        android:fillColor="#C9D1D9"
+        android:pathData="M45,50 L63,50 L63,53 L45,53 Z"/>
+    
+    <path
+        android:fillColor="#C9D1D9"
+        android:pathData="M45,58 L58,58 L58,61 L45,61 Z"/>
+    
+    <!-- Small dot indicator -->
+    <path
+        android:fillColor="#F85149"
+        android:pathData="M58,62 L62,62 L62,66 L58,66 Z"/>
+</vector>
