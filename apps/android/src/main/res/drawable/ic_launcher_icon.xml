@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    
+    <!-- Background circle -->
+    <path
+        android:fillColor="#0D1117"
+        android:pathData="M24,0 L24,0 A24,24 0 0 1 24,48 L24,48 A24,24 0 0 1 24,0 Z"/>
+    
+    <!-- Code bracket left -->
+    <path
+        android:fillColor="#58A6FF"
+        android:pathData="M12,10 L16,10 L12,24 L16,38 L12,38 L8,24 Z"/>
+    
+    <!-- Code bracket right -->
+    <path
+        android:fillColor="#58A6FF"
+        android:pathData="M36,10 L40,10 L44,24 L40,38 L36,38 L40,24 Z"/>
+    
+    <!-- Note shape -->
+    <path
+        android:fillColor="#238636"
+        android:pathData="M19,8 L29,8 L29,28 L24,34 L19,28 Z"/>
+    
+    <!-- Folded corner -->
+    <path
+        android:fillColor="#2EA043"
+        android:pathData="M29,8 L29,12 L24,12 L24,8 Z"/>
+    
+    <!-- Line 1 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M21,14 L27,14 L27,16 L21,16 Z"/>
+    
+    <!-- Line 2 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M21,18 L27,18 L27,20 L21,20 Z"/>
+    
+    <!-- Line 3 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M21,22 L25,22 L25,24 L21,24 Z"/>
+    
+    <!-- Red dot indicator -->
+    <path
+        android:fillColor="#F85149"
+        android:pathData="M26,23 L28,23 L28,25 L26,25 Z"/>
+</vector>
