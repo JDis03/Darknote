@@ -15,11 +15,11 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 
 /**
- * JVM/Desktop implementation of DropboxClient using official SDK.
+ * JVM/Desktop implementation of DropboxClient using PKCE auth (no secret required).
+ * This is the recommended approach for desktop applications.
  */
 class JvmDropboxClient(
-    private val appKey: String,
-    private val appSecret: String? = null
+    private val appKey: String
 ) : DropboxClient {
 
     private val config = DbxRequestConfig.newBuilder("darknote/1.0")
@@ -42,12 +42,9 @@ class JvmDropboxClient(
     override fun isAuthorized(): Boolean = client != null
 
     override fun getAuthUrl(): String {
-        val appInfo = if (appSecret != null) {
-            DbxAppInfo(appKey, appSecret)
-        } else {
-            DbxAppInfo(appKey)
-        }
-
+        // Use PKCE auth without secret - recommended for desktop apps
+        val appInfo = DbxAppInfo(appKey)
+        
         pkceWebAuth = DbxPKCEWebAuth(config, appInfo)
         val authRequest = DbxWebAuth.newRequestBuilder()
             .withNoRedirect()
@@ -207,11 +204,10 @@ class JvmDropboxClient(
  * JVM implementation of factory.
  */
 actual object DropboxClientFactory {
-    // DarkNote official Dropbox app credentials
+    // DarkNote official Dropbox app credentials (PKCE - no secret required)
     private const val APP_KEY = "97rske3f4p28pex"
-    private const val APP_SECRET = "gl8mmknb624o7c2"
 
     actual fun create(): DropboxClient {
-        return JvmDropboxClient(APP_KEY, APP_SECRET)
+        return JvmDropboxClient(APP_KEY)
     }
 }
