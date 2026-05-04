@@ -166,8 +166,10 @@ fun MainScreen() {
         initializer.initializeIfEmpty()
     }
     
-    val selectedItemId by viewModel.selectedItemId
-    val visibleItems = viewModel.visibleItems
+    val selectedItemId by viewModel.selectedItemId.collectAsState()
+    val visibleItems by viewModel.visibleItems.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val expandedFolderIds by viewModel.expandedFolderIds.collectAsState()
     
     // Editor state
     var editorContent by remember { mutableStateOf("") }
@@ -460,7 +462,7 @@ fun MainScreen() {
                 state = TreeViewState(
                     items = visibleItems,
                     selectedItemId = selectedItemId,
-                    searchQuery = viewModel.searchQuery.value
+                    searchQuery = searchQuery
                 ),
                 onItemClick = { item -> viewModel.selectItem(item.id) },
                 onItemToggle = { folder -> viewModel.toggleFolder(folder.id) },
