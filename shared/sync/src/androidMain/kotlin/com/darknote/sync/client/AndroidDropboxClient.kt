@@ -299,17 +299,22 @@ class AndroidDropboxClient(
  * Android implementation of DropboxClientFactory
  */
 actual object DropboxClientFactory {
-    private const val DEFAULT_APP_KEY = "97rske3f4p28pex" // Same as Desktop
+    // Use Joplin's dev credentials for now (working OAuth setup)
+    private const val DEFAULT_APP_KEY = "cx9li9ur8taq1z7" // Joplin dev
+    private const val DEFAULT_APP_SECRET = "i8f9a1mvx3bijrt" // Joplin dev
+    
     private var context: Context? = null
     private var appKey: String = DEFAULT_APP_KEY
+    private var appSecret: String = DEFAULT_APP_SECRET
 
-    fun initialize(context: Context, appKey: String = DEFAULT_APP_KEY) {
+    fun initialize(context: Context, appKey: String = DEFAULT_APP_KEY, appSecret: String = DEFAULT_APP_SECRET) {
         this.context = context.applicationContext
         this.appKey = appKey
+        this.appSecret = appSecret
     }
 
     actual fun create(): DropboxClient {
         val ctx = context ?: throw IllegalStateException("DropboxClientFactory not initialized. Call initialize() first.")
-        return AndroidDropboxClient(ctx, appKey)
+        return AndroidDropboxClient(ctx, appKey, appSecret)
     }
 }

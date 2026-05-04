@@ -207,9 +207,11 @@ class JvmDropboxClient(
  * JVM implementation of factory.
  */
 actual object DropboxClientFactory {
-    private const val APP_KEY = "97rske3f4p28pex"
+    // Use Joplin's dev credentials for now (working OAuth setup)
+    private const val APP_KEY = "cx9li9ur8taq1z7"
+    private const val APP_SECRET = "i8f9a1mvx3bijrt"
 
     actual fun create(): DropboxClient {
-        return JvmDropboxClient(APP_KEY)
+        return JvmDropboxClient(APP_KEY, APP_SECRET)
     }
 }
