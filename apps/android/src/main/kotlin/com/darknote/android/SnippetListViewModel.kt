@@ -117,6 +117,8 @@ class SnippetListViewModel(
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val deletedSnippets = mutableMapOf<String, Snippet>()
+    private val deletionTimestamps = mutableMapOf<String, Long>()
+    private val DELETION_RETENTION_MS = 5 * 60 * 1000L // 5 minutes
 
     init {
         loadSnippets()
@@ -229,10 +231,14 @@ class SnippetListViewModel(
     fun deleteSnippet(snippet: Snippet) {
         viewModelScope.launch {
             deletedSnippets[snippet.id] = snippet
+            deletionTimestamps[snippet.id] = System.currentTimeMillis()
             snippetRepository.delete(snippet.id)
             
             // Trigger sync after delete
             triggerSync()
+            
+            // Schedule cleanup after retention period
+            cleanupOldDeletions()
             
             showSnackbar(
                 SnackbarData(
@@ -246,9 +252,22 @@ class SnippetListViewModel(
             )
         }
     }
+    
+    private fun cleanupOldDeletions() {
+        val cutoff = System.currentTimeMillis() - DELETION_RETENTION_MS
+        val iterator = deletionTimestamps.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (entry.value < cutoff) {
+                deletedSnippets.remove(entry.key)
+                iterator.remove()
+            }
+        }
+    }
 
     private suspend fun restoreSnippet(snippetId: String) {
         val snippet = deletedSnippets.remove(snippetId) ?: return
+        deletionTimestamps.remove(snippetId)
         snippetRepository.create(snippet)
         
         // Trigger sync after restore

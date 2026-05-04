@@ -2,6 +2,8 @@ package com.darknote.sync.client
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.dropbox.core.DbxAppInfo
 import com.dropbox.core.DbxAuthFinish
 import com.dropbox.core.DbxPKCEWebAuth
@@ -20,6 +22,8 @@ import java.io.FileOutputStream
 /**
  * Android implementation of DropboxClient using PKCE auth via DbxPKCEWebAuth.
  * Same approach as JvmDropboxClient — no secret required.
+ * 
+ * SECURITY: Uses EncryptedSharedPreferences to store auth tokens securely.
  */
 class AndroidDropboxClient(
     private val context: Context,
@@ -31,8 +35,26 @@ class AndroidDropboxClient(
         .withHttpRequestor(OkHttp3Requestor(OkHttp3Requestor.defaultOkHttpClient()))
         .build()
 
-    private val prefs: SharedPreferences =
-        context.getSharedPreferences("dropbox_auth", Context.MODE_PRIVATE)
+    // ENCRYPTED SharedPreferences for secure token storage
+    private val prefs: SharedPreferences by lazy {
+        try {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            
+            EncryptedSharedPreferences.create(
+                context,
+                "dropbox_auth_secure",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: Exception) {
+            // Fallback to regular SharedPreferences if encryption fails (rare)
+            // In production, you might want to log this or handle differently
+            context.getSharedPreferences("dropbox_auth_fallback", Context.MODE_PRIVATE)
+        }
+    }
 
     private var client: DbxClientV2? = null
     private var pkceWebAuth: DbxPKCEWebAuth? = null

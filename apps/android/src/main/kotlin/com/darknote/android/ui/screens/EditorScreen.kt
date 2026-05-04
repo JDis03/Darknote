@@ -310,12 +310,13 @@ fun EditorScreen(
                     }
                 )
                 // Share
+                val context = LocalContext.current
                 ListItem(
                     headlineContent = { Text("Share snippet") },
                     leadingContent = { Icon(Icons.Default.Share, null) },
                     modifier = Modifier.clickable {
                         showMoreSheet = false
-                        viewModel.shareSnippet(snippet, android.app.Activity())
+                        viewModel.shareSnippet(snippet, context)
                     }
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
