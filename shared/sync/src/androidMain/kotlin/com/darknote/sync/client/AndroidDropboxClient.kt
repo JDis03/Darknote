@@ -43,13 +43,13 @@ class AndroidDropboxClient(
     override fun isAuthorized(): Boolean = client != null
 
     override fun getAuthUrl(): String {
-        val appInfo = DbxAppInfo(appKey)
+        val redirectUri = "db-$appKey://auth"
         
-        // For Android, we'll use the simplified OAuth flow
-        // The URL will be handled by CustomTabs in the UI
+        // Use proper OAuth2 URL with redirect URI for Android
         return "https://www.dropbox.com/oauth2/authorize?" +
                 "client_id=$appKey&" +
                 "response_type=code&" +
+                "redirect_uri=$redirectUri&" +
                 "token_access_type=offline"
     }
 
@@ -57,10 +57,11 @@ class AndroidDropboxClient(
         return try {
             withContext(Dispatchers.IO) {
                 val appInfo = DbxAppInfo(appKey)
+                val redirectUri = "db-$appKey://auth"
                 
-                // Exchange code for access token
-                val authFinish = com.dropbox.core.DbxWebAuth(config, appInfo)
-                    .finishFromCode(code)
+                // Use the proper OAuth2 flow for Android
+                val webAuth = com.dropbox.core.DbxWebAuth(config, appInfo)
+                val authFinish = webAuth.finishFromCode(code, redirectUri)
 
                 val credential = DbxCredential(
                     authFinish.accessToken,
@@ -102,8 +103,8 @@ class AndroidDropboxClient(
                             size = metadata.size
                         )
                         else -> null // Skip folders for now
-                    }
-                }
+    }
+}
 
                 Result.success(files)
             }
