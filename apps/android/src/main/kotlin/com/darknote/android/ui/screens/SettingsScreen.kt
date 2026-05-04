@@ -148,8 +148,7 @@ fun SettingsScreen(
                                         .fillMaxWidth()
                                         .padding(bottom = 16.dp),
                                     onClick = {
-                                        val intent = androidx.browser.customtabs.CustomTabsIntent.Builder().build()
-                                        intent.launchUrl(context, android.net.Uri.parse(authUrl))
+                                        authViewModel.openAuthUrl(context)
                                     }
                                 ) {
                                     Text(
@@ -183,7 +182,7 @@ fun SettingsScreen(
                                 ) {
                                     OutlinedButton(
                                         onClick = { 
-                                            authViewModel.startAuth(context) // Reset to get new URL
+                                            authViewModel.logout() // Clear everything and start over
                                             authCode = ""
                                         },
                                         modifier = Modifier.weight(1f)

@@ -54,24 +54,35 @@ class AuthViewModel(
     }
 
     /**
-     * Start OAuth authentication by opening browser.
+     * Generate OAuth URL (Joplin style - no auto-open).
      */
     fun startAuth(context: Context) {
         try {
-            _authState.value = AuthState.Authorizing
             val authUrl = dropboxClient.getAuthUrl()
             _authUrl.value = authUrl
-            
-            addLog("Starting OAuth flow...", LogType.INFO)
-            
-            // Open URL in Custom Tabs
-            val intent = CustomTabsIntent.Builder().build()
-            intent.launchUrl(context, Uri.parse(authUrl))
-            
-            addLog("Opened browser for authentication", LogType.INFO)
+            // Keep state as NotAuthenticated to show the URL and code input
+            addLog("OAuth URL generated", LogType.INFO)
         } catch (e: Exception) {
-            _authState.value = AuthState.Error("Failed to start auth: ${e.message}")
-            addLog("Error starting auth: ${e.message}", LogType.ERROR)
+            _authState.value = AuthState.Error("Failed to generate auth URL: ${e.message}")
+            addLog("Error generating auth URL: ${e.message}", LogType.ERROR)
+        }
+    }
+    
+    /**
+     * Open OAuth URL in browser manually.
+     */
+    fun openAuthUrl(context: Context) {
+        val url = _authUrl.value
+        if (url != null) {
+            try {
+                // Force external browser, not in-app
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url))
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+                addLog("Opened browser for authentication", LogType.INFO)
+            } catch (e: Exception) {
+                addLog("Failed to open browser: ${e.message}", LogType.ERROR)
+            }
         }
     }
 
@@ -179,6 +190,7 @@ class AuthViewModel(
                 dropboxClient.logout()
             }
             _authState.value = AuthState.NotAuthenticated
+            _authUrl.value = null // Clear auth URL
             addLog("Logged out successfully", LogType.INFO)
         } catch (e: Exception) {
             addLog("Logout error: ${e.message}", LogType.ERROR)
