@@ -86,7 +86,8 @@ class JvmDropboxClient(
                                 path = entry.pathLower ?: entry.name,
                                 name = entry.name,
                                 modifiedTime = modifiedTime,
-                                size = entry.size
+                                size = entry.size,
+                                rev = entry.rev
                             )
                         }
                         else -> null // Skip folders

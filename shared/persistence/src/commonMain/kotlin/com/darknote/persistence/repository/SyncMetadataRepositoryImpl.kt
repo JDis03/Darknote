@@ -125,44 +125,36 @@ class SyncMetadataRepositoryImpl(
     override suspend fun updateRemoteRevision(snippetId: String, revision: String): Result<Unit> {
         return try {
             withContext(Dispatchers.Default) {
-                // Get existing metadata first
                 val existing = queries.selectMetadataBySnippetId(snippetId).executeAsOneOrNull()
-                if (existing != null) {
-                    // Update using replace
-                    queries.insertOrReplaceMetadata(
-                        snippet_id = snippetId,
-                        usage_count = existing.usage_count ?: 0,
-                        last_copied_at = existing.last_copied_at,
-                        dropbox_rev = revision,
-                        local_hash = existing.local_hash ?: "", // Handle nullable field
-                        last_sync_at = existing.last_sync_at,
-                        conflict_status = existing.conflict_status
-                    )
-                }
+                queries.insertOrReplaceMetadata(
+                    snippet_id = snippetId,
+                    usage_count = existing?.usage_count ?: 0,
+                    last_copied_at = existing?.last_copied_at,
+                    dropbox_rev = revision,
+                    local_hash = existing?.local_hash ?: "",
+                    last_sync_at = existing?.last_sync_at ?: System.currentTimeMillis(),
+                    conflict_status = existing?.conflict_status
+                )
             }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
-    
+
     override suspend fun updateLastSyncTime(snippetId: String, timestamp: Long): Result<Unit> {
         return try {
             withContext(Dispatchers.Default) {
-                // Get existing metadata first
                 val existing = queries.selectMetadataBySnippetId(snippetId).executeAsOneOrNull()
-                if (existing != null) {
-                    // Update using replace
-                    queries.insertOrReplaceMetadata(
-                        snippet_id = snippetId,
-                        usage_count = existing.usage_count ?: 0,
-                        last_copied_at = existing.last_copied_at,
-                        dropbox_rev = existing.dropbox_rev,
-                        local_hash = existing.local_hash ?: "", // Handle nullable field
-                        last_sync_at = timestamp,
-                        conflict_status = existing.conflict_status
-                    )
-                }
+                queries.insertOrReplaceMetadata(
+                    snippet_id = snippetId,
+                    usage_count = existing?.usage_count ?: 0,
+                    last_copied_at = existing?.last_copied_at,
+                    dropbox_rev = existing?.dropbox_rev,
+                    local_hash = existing?.local_hash ?: "",
+                    last_sync_at = timestamp,
+                    conflict_status = existing?.conflict_status
+                )
             }
             Result.success(Unit)
         } catch (e: Exception) {

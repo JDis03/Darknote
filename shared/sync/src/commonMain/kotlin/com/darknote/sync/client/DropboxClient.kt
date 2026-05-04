@@ -50,7 +50,8 @@ data class RemoteFile(
     val path: String,
     val name: String,
     val modifiedTime: Long,
-    val size: Long
+    val size: Long,
+    val rev: String = ""
 )
 
 data class RemoteMetadata(

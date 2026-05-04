@@ -86,7 +86,8 @@ class AndroidDropboxClient(
                             modifiedTime = entry.clientModified?.time
                                 ?: entry.serverModified?.time
                                 ?: System.currentTimeMillis(),
-                            size = entry.size
+                            size = entry.size,
+                            rev = entry.rev
                         )
                         else -> null
                     }

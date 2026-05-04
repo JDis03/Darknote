@@ -2,7 +2,7 @@ package com.darknote.sync.engine
 
 import com.darknote.core.model.Snippet
 import com.darknote.core.model.SyncMetadata
-import com.darknote.core.model.SyncStatus
+import com.darknote.core.model.SyncStatus as SnippetSyncStatus
 import com.darknote.core.repository.SnippetRepository
 import com.darknote.core.repository.FolderRepository
 import com.darknote.core.repository.SyncMetadataRepository
@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.Serializable
 
 /**
  * Sync engine inspired by Joplin's synchronization architecture.
@@ -338,59 +341,106 @@ class SyncEngine(
     private fun extractSnippetIdFromPath(path: String): String = 
         path.substringBeforeLast(".").substringAfterLast("/")
         
-    private fun extractRevisionFromFile(file: RemoteFile): String = 
-        "rev_${file.modifiedTime}"
+    private fun extractRevisionFromFile(file: RemoteFile): String = file.rev.ifEmpty { "rev_${file.modifiedTime}" }
         
     private fun generateRemotePath(snippet: Snippet): String = 
         "/darknote/${snippet.id}.txt"
         
+    @Serializable
+    private data class SnippetFileFormat(
+        val id: String,
+        val title: String,
+        val content: String,
+        val folderId: String? = null,
+        val tags: List<String> = emptyList(),
+        val language: String? = null,
+        val isFavorite: Boolean = false,
+        val createdAt: Long,
+        val modifiedAt: Long
+    )
+
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
     private suspend fun createTempFile(snippet: Snippet): java.io.File {
         val tempFile = kotlin.io.path.createTempFile().toFile()
-        tempFile.writeText(snippet.content)
+        val fileFormat = SnippetFileFormat(
+            id = snippet.id,
+            title = snippet.title,
+            content = snippet.content,
+            folderId = snippet.folderId,
+            tags = snippet.tags,
+            language = snippet.language,
+            isFavorite = snippet.isFavorite,
+            createdAt = snippet.createdAt,
+            modifiedAt = snippet.modifiedAt
+        )
+        tempFile.writeText(json.encodeToString(fileFormat))
         return tempFile
     }
     
-    private suspend fun createSnippetFromRemote(remoteFile: RemoteFile, content: String) {
-        val snippetId = extractSnippetIdFromPath(remoteFile.path)
-        val title = remoteFile.name.substringBeforeLast(".txt")
-        
+    private suspend fun createSnippetFromRemote(remoteFile: RemoteFile, fileContent: String) {
+        val parsed = parseSnippetFile(fileContent, remoteFile)
         val snippet = Snippet(
-            id = snippetId,
-            title = title,
-            content = content,
-            folderId = null,
-            tags = emptyList(),
-            language = null,
-            isFavorite = false,
-            createdAt = remoteFile.modifiedTime,
-            modifiedAt = remoteFile.modifiedTime,
+            id = parsed.id,
+            title = parsed.title,
+            content = parsed.content,
+            folderId = parsed.folderId,
+            tags = parsed.tags,
+            language = parsed.language,
+            isFavorite = parsed.isFavorite,
+            createdAt = parsed.createdAt,
+            modifiedAt = parsed.modifiedAt,
             syncStatus = com.darknote.core.model.SyncStatus.SYNCED,
-            localPath = storageService.generateSafePath(title),
+            localPath = storageService.generateSafePath(parsed.title),
             docPath = null
         )
-        
+
         snippetRepository.create(snippet)
         storageService.saveSnippetContent(snippet)
-        
-        // Create sync metadata
+
         val syncMetadata = SyncMetadata(
-            snippetId = snippetId,
+            snippetId = parsed.id,
             remoteRevision = extractRevisionFromFile(remoteFile),
             lastSyncTime = System.currentTimeMillis(),
-            syncStatus = SyncStatus.SYNCED
+            syncStatus = SnippetSyncStatus.SYNCED
         )
         syncMetadataRepository.save(syncMetadata)
+
+        addLog("Imported '${parsed.title}' from remote", SyncLogType.SUCCESS)
     }
-    
-    private suspend fun updateSnippetFromRemote(snippet: Snippet, content: String, modifiedTime: Long) {
+
+    private suspend fun updateSnippetFromRemote(snippet: Snippet, fileContent: String, modifiedTime: Long) {
+        val parsed = parseSnippetFile(fileContent, RemoteFile("", "", modifiedTime, 0))
+
         val updatedSnippet = snippet.copy(
-            content = content,
-            modifiedAt = modifiedTime,
+            title = parsed.title,
+            content = parsed.content,
+            tags = parsed.tags,
+            language = parsed.language,
+            isFavorite = parsed.isFavorite,
+            modifiedAt = parsed.modifiedAt,
             syncStatus = com.darknote.core.model.SyncStatus.SYNCED
         )
-        
+
         snippetRepository.update(updatedSnippet)
         storageService.saveSnippetContent(updatedSnippet)
+    }
+
+    private fun parseSnippetFile(raw: String, fallback: RemoteFile): SnippetFileFormat {
+        return try {
+            json.decodeFromString<SnippetFileFormat>(raw)
+        } catch (e: Exception) {
+            val id = fallback.path.substringBeforeLast(".").substringAfterLast("/")
+            val title = fallback.name.substringBeforeLast(".txt")
+            SnippetFileFormat(
+                id = id,
+                title = title,
+                content = raw,
+                tags = emptyList(),
+                createdAt = fallback.modifiedTime,
+                modifiedAt = fallback.modifiedTime
+            )
+        }
     }
 }
 
