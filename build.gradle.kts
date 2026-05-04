@@ -1,24 +1,8 @@
 plugins {
-    kotlin("jvm") version "2.0.0"
-}
-
-group = "com.darknote"
-version = "1.0-SNAPSHOT"
-
-repositories {
-    mavenCentral()
-}
-
-dependencies {
-    implementation("com.dropbox.core:dropbox-core-sdk:6.0.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
-    testImplementation(kotlin("test"))
-}
-
-tasks.test {
-    useJUnitPlatform()
-}
-
-kotlin {
-    jvmToolchain(21)
+    kotlin("multiplatform") version "2.0.0" apply false
+    kotlin("android") version "2.0.0" apply false
+    id("com.android.application") version "8.5.0" apply false
+    id("app.cash.sqldelight") version "2.0.2" apply false
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.0.0" apply false
+    id("org.jetbrains.compose") version "1.6.11" apply false
 }
