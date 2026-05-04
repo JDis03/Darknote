@@ -342,7 +342,7 @@ class SyncEngine(
         "rev_${file.modifiedTime}"
         
     private fun generateRemotePath(snippet: Snippet): String = 
-        "/snippets/${snippet.id}.txt"
+        "/darknote/${snippet.id}.txt"
         
     private suspend fun createTempFile(snippet: Snippet): java.io.File {
         val tempFile = kotlin.io.path.createTempFile().toFile()
