@@ -133,7 +133,7 @@ class AuthViewModel(
                 
                 val result = dropboxClient.uploadFile(
                     localPath = testFile.absolutePath,
-                    remotePath = "/darknote_test_android.txt"
+                    remotePath = "/darknote/test-snippet-android-${System.currentTimeMillis()}.txt"
                 )
                 
                 testFile.delete() // Clean up
@@ -156,26 +156,22 @@ class AuthViewModel(
     fun testDownload() {
         viewModelScope.launch {
             try {
-                addLog("Testing download...", LogType.INFO)
-                
-                val tempFile = java.io.File.createTempFile("darknote_download", ".txt")
-                
-                val result = dropboxClient.downloadFile(
-                    remotePath = "/darknote_test_android.txt",
-                    localPath = tempFile.absolutePath
-                )
-                
+                addLog("Listing files in /darknote...", LogType.INFO)
+
+                val result = dropboxClient.listFiles("/darknote")
+
                 if (result.isSuccess) {
-                    val content = tempFile.readText()
-                    addLog("Download successful! Content: ${content.take(50)}...", LogType.SUCCESS)
+                    val files = result.getOrNull() ?: emptyList()
+                    addLog("Found ${files.size} files in Dropbox", LogType.SUCCESS)
+                    files.forEach { file ->
+                        addLog("  ${file.name} (${file.size} bytes)", LogType.INFO)
+                    }
                 } else {
                     val error = result.exceptionOrNull()?.message ?: "Unknown error"
-                    addLog("Download failed: $error", LogType.ERROR)
+                    addLog("List files failed: $error", LogType.ERROR)
                 }
-                
-                tempFile.delete() // Clean up
             } catch (e: Exception) {
-                addLog("Download error: ${e.message}", LogType.ERROR)
+                addLog("List exception: ${e.message}", LogType.ERROR)
             }
         }
     }

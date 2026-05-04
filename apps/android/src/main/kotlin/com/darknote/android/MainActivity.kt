@@ -41,9 +41,11 @@ class MainActivity : ComponentActivity() {
             this
         )
 
-        // Create Sync Engine
+        // Shared Dropbox client — auth + sync must use same instance
+        val dropboxClient = DropboxClientFactory.create()
+
         val syncEngine = SyncEngine(
-            dropboxClient = DropboxClientFactory.create(),
+            dropboxClient = dropboxClient,
             snippetRepository = databaseFactory.snippetRepository,
             folderRepository = databaseFactory.folderRepository,
             syncMetadataRepository = databaseFactory.syncMetadataRepository,
@@ -59,7 +61,7 @@ class MainActivity : ComponentActivity() {
         )
 
         val authViewModel = AuthViewModel(
-            dropboxClient = DropboxClientFactory.create()
+            dropboxClient = dropboxClient
         )
 
         lifecycleScope.launch {
