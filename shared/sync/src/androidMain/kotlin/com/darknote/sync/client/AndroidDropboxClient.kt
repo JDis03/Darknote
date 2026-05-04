@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.net.Uri
 import com.dropbox.core.DbxAppInfo
 import com.dropbox.core.DbxRequestConfig
+import com.dropbox.core.DbxPKCEWebAuth
 import com.dropbox.core.http.OkHttp3Requestor
 import com.dropbox.core.oauth.DbxCredential
 import com.dropbox.core.v2.DbxClientV2
@@ -35,6 +36,7 @@ class AndroidDropboxClient(
     private val prefs: SharedPreferences = context.getSharedPreferences("dropbox_auth", Context.MODE_PRIVATE)
 
     private var client: DbxClientV2? = null
+    private var pkceWebAuth: DbxPKCEWebAuth? = null
 
     init {
         loadClient()
@@ -43,25 +45,28 @@ class AndroidDropboxClient(
     override fun isAuthorized(): Boolean = client != null
 
     override fun getAuthUrl(): String {
-        val redirectUri = "db-$appKey://auth"
+        val appInfo = DbxAppInfo(appKey)
         
-        // Use proper OAuth2 URL with redirect URI for Android
-        return "https://www.dropbox.com/oauth2/authorize?" +
-                "client_id=$appKey&" +
-                "response_type=code&" +
-                "redirect_uri=$redirectUri&" +
-                "token_access_type=offline"
+        // Use PKCE for Android (more secure for mobile apps)
+        pkceWebAuth = DbxPKCEWebAuth(config, appInfo)
+        
+        val authRequest = com.dropbox.core.DbxWebAuth.newRequestBuilder()
+            .withRedirectUri("db-$appKey://auth", null) // Custom scheme allowed with PKCE
+            .withTokenAccessType(com.dropbox.core.TokenAccessType.OFFLINE)
+            .build()
+            
+        return pkceWebAuth!!.authorize(authRequest)
     }
 
     override suspend fun finishAuth(code: String): Result<Unit> {
         return try {
             withContext(Dispatchers.IO) {
-                val appInfo = DbxAppInfo(appKey)
-                val redirectUri = "db-$appKey://auth"
+                val pkceAuth = pkceWebAuth ?: return@withContext Result.failure<Unit>(
+                    IllegalStateException("PKCE auth not initialized. Call getAuthUrl() first.")
+                )
                 
-                // Use the proper OAuth2 flow for Android
-                val webAuth = com.dropbox.core.DbxWebAuth(config, appInfo)
-                val authFinish = webAuth.finishFromCode(code, redirectUri)
+                // Use PKCE to finish auth
+                val authFinish = pkceAuth.finishFromCode(code)
 
                 val credential = DbxCredential(
                     authFinish.accessToken,
