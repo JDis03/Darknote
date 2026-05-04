@@ -121,6 +121,22 @@ class SnippetListViewModel(
     init {
         loadSnippets()
         loadFolders()
+        initialSync()
+    }
+
+    private fun initialSync() {
+        viewModelScope.launch {
+            try {
+                Log.d("SnippetListViewModel", "Running initial sync...")
+                syncEngine.sync()
+                Log.d("SnippetListViewModel", "Initial sync completed")
+                // Refresh UI after pulling remote data
+                loadSnippets()
+                loadFolders()
+            } catch (e: Exception) {
+                Log.w("SnippetListViewModel", "Initial sync failed: ${e.message}")
+            }
+        }
     }
 
     private fun loadSnippets() {
@@ -384,6 +400,22 @@ class SnippetListViewModel(
         _createState.value = CreateSnippetState.Idle
     }
 
+    fun syncNow() {
+        viewModelScope.launch {
+            try {
+                Log.d("SnippetListViewModel", "Manual sync triggered")
+                syncEngine.sync()
+                Log.d("SnippetListViewModel", "Manual sync completed")
+                loadSnippets()
+                loadFolders()
+                showSnackbar(SnackbarData("Sync complete"))
+            } catch (e: Exception) {
+                Log.w("SnippetListViewModel", "Manual sync failed: ${e.message}")
+                showSnackbar(SnackbarData("Sync failed: ${e.message}"))
+            }
+        }
+    }
+
     /**
      * Triggers sync in the background
      * Only syncs if the sync engine is in a valid state for syncing
@@ -396,7 +428,6 @@ class SnippetListViewModel(
                 Log.d("SnippetListViewModel", "Sync completed successfully")
             } catch (e: Exception) {
                 Log.w("SnippetListViewModel", "Sync failed: ${e.message}")
-                // Don't show error to user for background sync - it's not critical
             }
         }
     }

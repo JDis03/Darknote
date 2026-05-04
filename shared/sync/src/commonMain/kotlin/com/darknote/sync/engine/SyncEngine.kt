@@ -346,28 +346,19 @@ class SyncEngine(
     private fun generateRemotePath(snippet: Snippet): String = 
         "/darknote/${snippet.id}.txt"
         
-    @Serializable
-    private data class SnippetFileFormat(
-        val id: String,
-        val title: String,
-        val content: String,
-        val folderId: String? = null,
-        val tags: List<String> = emptyList(),
-        val language: String? = null,
-        val isFavorite: Boolean = false,
-        val createdAt: Long,
-        val modifiedAt: Long
-    )
-
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     private suspend fun createTempFile(snippet: Snippet): java.io.File {
         val tempFile = kotlin.io.path.createTempFile().toFile()
+        val folderName = snippet.folderId?.let { fid ->
+            folderRepository.getById(fid)?.name
+        }
         val fileFormat = SnippetFileFormat(
             id = snippet.id,
             title = snippet.title,
             content = snippet.content,
             folderId = snippet.folderId,
+            folderName = folderName,
             tags = snippet.tags,
             language = snippet.language,
             isFavorite = snippet.isFavorite,
@@ -380,11 +371,17 @@ class SyncEngine(
     
     private suspend fun createSnippetFromRemote(remoteFile: RemoteFile, fileContent: String) {
         val parsed = parseSnippetFile(fileContent, remoteFile)
+
+        // Auto-create folder if referenced and doesn't exist locally
+        val localFolderId = if (parsed.folderId != null) {
+            createFolderIfMissing(parsed.folderId, parsed.folderName ?: "Imported Folder")
+        } else null
+
         val snippet = Snippet(
             id = parsed.id,
             title = parsed.title,
             content = parsed.content,
-            folderId = parsed.folderId,
+            folderId = localFolderId,
             tags = parsed.tags,
             language = parsed.language,
             isFavorite = parsed.isFavorite,
@@ -407,6 +404,22 @@ class SyncEngine(
         syncMetadataRepository.save(syncMetadata)
 
         addLog("Imported '${parsed.title}' from remote", SyncLogType.SUCCESS)
+    }
+
+    private suspend fun createFolderIfMissing(folderId: String, folderName: String): String {
+        val existing = folderRepository.getById(folderId)
+        if (existing != null) return folderId
+
+        val folder = com.darknote.core.model.Folder(
+            id = folderId,
+            name = folderName,
+            parentId = null,
+            sortOrder = 0,
+            createdAt = System.currentTimeMillis()
+        )
+        folderRepository.create(folder)
+        addLog("Auto-created folder '$folderName' from remote snippet", SyncLogType.INFO)
+        return folderId
     }
 
     private suspend fun updateSnippetFromRemote(snippet: Snippet, fileContent: String, modifiedTime: Long) {
@@ -518,3 +531,20 @@ data class ConflictInfo(
  * Sync-related exceptions
  */
 class SyncException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
+/**
+ * Wire format for synced snippet files — contains full metadata + content.
+ */
+@Serializable
+data class SnippetFileFormat(
+    val id: String,
+    val title: String,
+    val content: String,
+    val folderId: String? = null,
+    val folderName: String? = null,
+    val tags: List<String> = emptyList(),
+    val language: String? = null,
+    val isFavorite: Boolean = false,
+    val createdAt: Long,
+    val modifiedAt: Long
+)
