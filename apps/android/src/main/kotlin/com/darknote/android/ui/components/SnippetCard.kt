@@ -103,6 +103,7 @@ fun SnippetCard(
     onToggleFavorite: () -> Unit,
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
+    onTagClick: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val copiedBgColor by animateColorAsState(
@@ -194,7 +195,7 @@ fun SnippetCard(
                 ) {
                     snippet.tags.take(3).forEach { tag ->
                         AssistChip(
-                            onClick = { },
+                            onClick = { onTagClick(tag) },
                             label = {
                                 Text(
                                     "#$tag",

@@ -16,7 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material.ExperimentalMaterialApi
@@ -61,6 +64,10 @@ import com.darknote.android.ui.components.SnippetCard
 import com.darknote.android.ui.components.SnippetContextMenu
 import com.darknote.android.ui.components.SwipeToDismissBox
 import com.darknote.core.model.Snippet
+import com.darknote.sync.engine.SyncState
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,6 +88,7 @@ fun HomeScreen(
     val snackbarData by viewModel.snackbarData.collectAsState()
     val recentSearches by viewModel.recentSearches.collectAsState()
     val createState by viewModel.createState.collectAsState()
+    val syncState by viewModel.syncState.collectAsState()
 
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -129,6 +137,37 @@ fun HomeScreen(
                     )
                 },
                 actions = {
+                    // Sync status indicator
+                    when (syncState) {
+                        is SyncState.Syncing -> {
+                            Icon(
+                                Icons.Default.Sync,
+                                contentDescription = "Syncing",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        is SyncState.Synced -> {
+                            Icon(
+                                Icons.Default.CloudDone,
+                                contentDescription = "Synced",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        is SyncState.Error -> {
+                            Icon(
+                                Icons.Default.CloudOff,
+                                contentDescription = "Sync error",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        is SyncState.Idle -> { /* No icon */ }
+                    }
+                    
+                    Spacer(Modifier.width(8.dp))
+                    
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(
                             Icons.Default.Settings,

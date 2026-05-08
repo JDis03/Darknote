@@ -1,5 +1,7 @@
 package com.darknote.android.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -8,7 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.Star
@@ -25,15 +29,19 @@ import androidx.compose.ui.unit.dp
 import com.darknote.core.model.Folder
 import com.darknote.android.SortOrder
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FilterBar(
     folders: List<Folder>,
     selectedFolderId: String?,
+    selectedTag: String?,
     showFavoritesOnly: Boolean,
     sortOrder: SortOrder,
     onFolderSelect: (String?) -> Unit,
     onFavoritesToggle: () -> Unit,
     onSortOrderChange: (SortOrder) -> Unit,
+    onFolderLongClick: (Folder) -> Unit = { },
+    onTagClear: () -> Unit = { },
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -66,6 +74,32 @@ fun FilterBar(
                     Icon(
                         Icons.Default.Folder,
                         contentDescription = null,
+                        modifier = Modifier.size(FilterChipDefaults.IconSize)
+                    )
+                },
+                modifier = Modifier.combinedClickable(
+                    onClick = { onFolderSelect(if (selectedFolderId == folder.id) null else folder.id) },
+                    onLongClick = { onFolderLongClick(folder) }
+                )
+            )
+        }
+
+        if (selectedTag != null) {
+            FilterChip(
+                selected = true,
+                onClick = onTagClear,
+                label = { Text("#$selectedTag") },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Label,
+                        contentDescription = null,
+                        modifier = Modifier.size(FilterChipDefaults.IconSize)
+                    )
+                },
+                trailingIcon = {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Clear tag filter",
                         modifier = Modifier.size(FilterChipDefaults.IconSize)
                     )
                 }

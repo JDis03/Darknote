@@ -63,14 +63,16 @@ class SnippetListViewModel(
     private val _showFavoritesOnly = MutableStateFlow(false)
     private val _sortOrder = MutableStateFlow(SortOrder.MODIFIED_DESC)
     private val _selectedFolderId = MutableStateFlow<String?>(null)
+    private val _selectedTag = MutableStateFlow<String?>(null)
 
     val filteredSnippets = combine(
-        _allSnippets,
-        _searchQuery,
-        _showFavoritesOnly,
-        _sortOrder,
-        _selectedFolderId
-    ) { snippets, query, favoritesOnly, sortOrder, folderId ->
+        combine(_allSnippets, _searchQuery, _showFavoritesOnly) { snippets, query, favoritesOnly ->
+            Triple(snippets, query, favoritesOnly)
+        },
+        combine(_sortOrder, _selectedFolderId, _selectedTag) { sortOrder, folderId, tag ->
+            Triple(sortOrder, folderId, tag)
+        }
+    ) { (snippets, query, favoritesOnly), (sortOrder, folderId, tag) ->
         var filtered = snippets.filter { snippet ->
             val matchesQuery = query.isBlank() ||
                 snippet.title.contains(query, ignoreCase = true) ||
@@ -80,8 +82,9 @@ class SnippetListViewModel(
 
             val matchesFavorite = !favoritesOnly || snippet.isFavorite
             val matchesFolder = folderId == null || snippet.folderId == folderId
+            val matchesTag = tag == null || snippet.tags.any { it.equals(tag, ignoreCase = true) }
 
-            matchesQuery && matchesFavorite && matchesFolder
+            matchesQuery && matchesFavorite && matchesFolder && matchesTag
         }
 
         filtered = when (sortOrder) {
@@ -98,6 +101,7 @@ class SnippetListViewModel(
     val showFavoritesOnly: StateFlow<Boolean> = _showFavoritesOnly.asStateFlow()
     val sortOrder: StateFlow<SortOrder> = _sortOrder.asStateFlow()
     val selectedFolderId: StateFlow<String?> = _selectedFolderId.asStateFlow()
+    val selectedTag: StateFlow<String?> = _selectedTag.asStateFlow()
 
     private val _copiedSnippetId = MutableStateFlow<String?>(null)
     val copiedSnippetId: StateFlow<String?> = _copiedSnippetId.asStateFlow()
@@ -116,6 +120,8 @@ class SnippetListViewModel(
 
     private val _recentSearches = MutableStateFlow<List<String>>(emptyList())
     val recentSearches: StateFlow<List<String>> = _recentSearches.asStateFlow()
+
+    val syncState: StateFlow<com.darknote.sync.engine.SyncState> = syncEngine.state
 
     private val recentSnippets: StateFlow<List<Snippet>> = _allSnippets
         .combine(_selectedFolderId) { snippets, _ ->
@@ -192,6 +198,10 @@ class SnippetListViewModel(
 
     fun selectFolder(folderId: String?) {
         _selectedFolderId.value = folderId
+    }
+
+    fun selectTag(tag: String?) {
+        _selectedTag.value = tag
     }
 
     fun copySnippet(snippet: Snippet) {
@@ -332,6 +342,30 @@ class SnippetListViewModel(
         }
     }
 
+    fun renameSnippet(id: String, newTitle: String) {
+        viewModelScope.launch {
+            try {
+                val snippet = _allSnippets.value.find { it.id == id } ?: return@launch
+                val updated = snippet.copy(
+                    title = newTitle,
+                    modifiedAt = System.currentTimeMillis()
+                )
+                val result = snippetRepository.update(updated)
+                if (result.isFailure) {
+                    showSnackbar(SnackbarData("Failed to rename snippet: ${result.exceptionOrNull()?.message}"))
+                    return@launch
+                }
+                
+                loadSnippets()
+                triggerSync()
+                showSnackbar(SnackbarData("Snippet renamed to \"$newTitle\""))
+            } catch (e: Exception) {
+                Log.e("SnippetListViewModel", "Failed to rename snippet", e)
+                showSnackbar(SnackbarData("Failed to rename snippet: ${e.message}"))
+            }
+        }
+    }
+
     fun updateSnippet(snippet: Snippet) {
         viewModelScope.launch {
             try {
@@ -437,6 +471,81 @@ class SnippetListViewModel(
             } catch (e: Exception) {
                 Log.w("SnippetListViewModel", "Manual sync failed: ${e.message}")
                 showSnackbar(SnackbarData("Sync failed: ${e.message}"))
+            }
+        }
+    }
+
+    // FOLDER CRUD OPERATIONS
+
+    fun createFolder(name: String, parentId: String?) {
+        viewModelScope.launch {
+            try {
+                val id = UUID.randomUUID().toString()
+                val folder = Folder(
+                    id = id,
+                    name = name,
+                    parentId = parentId,
+                    sortOrder = 0,
+                    createdAt = System.currentTimeMillis()
+                )
+                val result = folderRepository.create(folder)
+                if (result.isFailure) {
+                    showSnackbar(SnackbarData("Failed to create folder: ${result.exceptionOrNull()?.message}"))
+                    return@launch
+                }
+                
+                // Trigger sync after create
+                triggerSync()
+                showSnackbar(SnackbarData("Folder \"$name\" created"))
+            } catch (e: Exception) {
+                Log.e("SnippetListViewModel", "Failed to create folder", e)
+                showSnackbar(SnackbarData("Failed to create folder: ${e.message}"))
+            }
+        }
+    }
+
+    fun renameFolder(id: String, newName: String) {
+        viewModelScope.launch {
+            try {
+                val folder = _folders.value.find { it.id == id } ?: return@launch
+                val updated = folder.copy(name = newName)
+                val result = folderRepository.update(updated)
+                if (result.isFailure) {
+                    showSnackbar(SnackbarData("Failed to rename folder: ${result.exceptionOrNull()?.message}"))
+                    return@launch
+                }
+                
+                // Trigger sync after update
+                triggerSync()
+                showSnackbar(SnackbarData("Folder renamed to \"$newName\""))
+            } catch (e: Exception) {
+                Log.e("SnippetListViewModel", "Failed to rename folder", e)
+                showSnackbar(SnackbarData("Failed to rename folder: ${e.message}"))
+            }
+        }
+    }
+
+    fun deleteFolder(id: String, moveChildrenToParent: Boolean) {
+        viewModelScope.launch {
+            try {
+                val folder = _folders.value.find { it.id == id } ?: return@launch
+                val result = folderRepository.delete(id, moveChildrenToParent)
+                if (result.isFailure) {
+                    showSnackbar(SnackbarData("Failed to delete folder: ${result.exceptionOrNull()?.message}"))
+                    return@launch
+                }
+                
+                // Clear selection if deleted folder was selected
+                if (_selectedFolderId.value == id) {
+                    _selectedFolderId.value = null
+                }
+                
+                // Trigger sync after delete
+                triggerSync()
+                showSnackbar(SnackbarData("Folder \"${folder.name}\" deleted"))
+            } catch (e: Exception) {
+                Log.e("SnippetListViewModel", "Failed to delete folder", e)
+                showSnackbar(SnackbarData("Failed to delete folder: ${e.message}"))
             }
         }
     }

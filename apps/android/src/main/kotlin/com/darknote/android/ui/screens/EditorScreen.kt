@@ -50,6 +50,7 @@ fun EditorScreen(
     var content by remember { mutableStateOf("") }
     var originalContent by remember { mutableStateOf("") }
     var title by remember { mutableStateOf("") }
+    var originalTitle by remember { mutableStateOf("") }
     var isModified by remember { mutableStateOf(false) }
     var saveStatus by remember { mutableStateOf(EditorSaveStatus.Idle) }
     var showMoreSheet by remember { mutableStateOf(false) }

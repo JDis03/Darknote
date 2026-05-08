@@ -1,0 +1,28 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Code brackets symbol with snippet lines -->
+    
+    <!-- Left bracket -->
+    <path
+        android:fillColor="#58A6FF"
+        android:pathData="M32,40 L28,44 L28,64 L32,68 L36,68 L36,64 L32,64 L32,44 L36,44 L36,40 Z"/>
+    
+    <!-- Right bracket -->
+    <path
+        android:fillColor="#58A6FF"
+        android:pathData="M76,40 L72,40 L72,44 L76,44 L76,64 L72,64 L72,68 L76,68 L80,64 L80,44 Z"/>
+    
+    <!-- Code lines (snippet content representation) -->
+    <path
+        android:fillColor="#238636"
+        android:pathData="M40,46 L68,46 L68,50 L40,50 Z"/>
+    <path
+        android:fillColor="#238636"
+        android:pathData="M40,54 L62,54 L62,58 L40,58 Z"/>
+    <path
+        android:fillColor="#F85149"
+        android:pathData="M40,62 L56,62 L56,66 L40,66 Z"/>
+</vector>
