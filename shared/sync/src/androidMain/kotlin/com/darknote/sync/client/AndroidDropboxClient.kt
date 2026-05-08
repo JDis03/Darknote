@@ -63,7 +63,13 @@ class AndroidDropboxClient(
         loadClient()
     }
 
-    override fun isAuthorized(): Boolean = client != null
+    override fun isAuthorized(): Boolean {
+        // Reload client from saved credentials if not already loaded
+        if (client == null) {
+            loadClient()
+        }
+        return client != null
+    }
 
     override fun getAuthUrl(): String {
         val appInfo = DbxAppInfo(appKey)
