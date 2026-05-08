@@ -64,6 +64,7 @@ fun EditorScreen(
             content = loaded.content
             originalContent = loaded.content
             title = loaded.title
+            originalTitle = loaded.title
         }
     }
 
@@ -77,6 +78,20 @@ fun EditorScreen(
                 saveStatus = EditorSaveStatus.Saved
                 originalContent = content
                 isModified = false
+                delay(1200L)
+                if (saveStatus == EditorSaveStatus.Saved) saveStatus = EditorSaveStatus.Idle
+            }
+        }
+    }
+
+    LaunchedEffect(title) {
+        if (title != originalTitle && title.isNotBlank()) {
+            delay(1500L)
+            if (title != originalTitle && snippet != null) {
+                saveStatus = EditorSaveStatus.Saving
+                viewModel.updateSnippet(snippet.copy(title = title))
+                saveStatus = EditorSaveStatus.Saved
+                originalTitle = title
                 delay(1200L)
                 if (saveStatus == EditorSaveStatus.Saved) saveStatus = EditorSaveStatus.Idle
             }
