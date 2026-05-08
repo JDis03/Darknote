@@ -83,6 +83,7 @@ fun HomeScreen(
     val showFavoritesOnly by viewModel.showFavoritesOnly.collectAsState()
     val sortOrder by viewModel.sortOrder.collectAsState()
     val selectedFolderId by viewModel.selectedFolderId.collectAsState()
+    val selectedTag by viewModel.selectedTag.collectAsState()
     val folders by viewModel.folders.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val snackbarData by viewModel.snackbarData.collectAsState()
@@ -218,11 +219,13 @@ fun HomeScreen(
                 FilterBar(
                     folders = folders,
                     selectedFolderId = selectedFolderId,
+                    selectedTag = selectedTag,
                     showFavoritesOnly = showFavoritesOnly,
                     sortOrder = sortOrder,
                     onFolderSelect = viewModel::selectFolder,
                     onFavoritesToggle = viewModel::toggleShowFavorites,
-                    onSortOrderChange = viewModel::setSortOrder
+                    onSortOrderChange = viewModel::setSortOrder,
+                    onTagClear = { viewModel.selectTag(null) }
                 )
 
                 if (snippets.isEmpty()) {
@@ -282,6 +285,10 @@ fun HomeScreen(
                     onEdit = {
                         showContextMenu = false
                         onNavigateToEditor(snippet.id)
+                    },
+                    onRename = {
+                        showContextMenu = false
+                        // TODO: add rename dialog
                     },
                     onCopy = {
                         showContextMenu = false
