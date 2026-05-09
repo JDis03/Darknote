@@ -74,9 +74,10 @@ fun EditorScreen(
             delay(1500L)
             if (content != originalContent && snippet != null) {
                 saveStatus = EditorSaveStatus.Saving
-                viewModel.updateSnippet(snippet.copy(content = content))
+                viewModel.updateSnippet(snippet.copy(title = title, content = content))
                 saveStatus = EditorSaveStatus.Saved
                 originalContent = content
+                originalTitle = title
                 isModified = false
                 delay(1200L)
                 if (saveStatus == EditorSaveStatus.Saved) saveStatus = EditorSaveStatus.Idle
@@ -89,9 +90,10 @@ fun EditorScreen(
             delay(1500L)
             if (title != originalTitle && snippet != null) {
                 saveStatus = EditorSaveStatus.Saving
-                viewModel.updateSnippet(snippet.copy(title = title))
+                viewModel.updateSnippet(snippet.copy(title = title, content = content))
                 saveStatus = EditorSaveStatus.Saved
                 originalTitle = title
+                originalContent = content
                 delay(1200L)
                 if (saveStatus == EditorSaveStatus.Saved) saveStatus = EditorSaveStatus.Idle
             }
