@@ -1,9 +1,7 @@
 package com.darknote.android
 
 import android.content.Intent
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.darknote.core.clipboard.ClipboardManager
 import com.darknote.core.model.Folder
@@ -13,7 +11,9 @@ import com.darknote.core.repository.FolderRepository
 import com.darknote.core.repository.SnippetRepository
 import com.darknote.core.storage.FileStorageService
 import com.darknote.sync.engine.SyncEngine
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,7 +50,8 @@ sealed class UiState {
     data class Error(val message: String) : UiState()
 }
 
-class SnippetListViewModel(
+@HiltViewModel
+class SnippetListViewModel @Inject constructor(
     private val snippetRepository: SnippetRepository,
     private val folderRepository: FolderRepository,
     private val storageService: FileStorageService,
@@ -564,24 +565,5 @@ class SnippetListViewModel(
                 Log.w("SnippetListViewModel", "Sync failed: ${e.message}")
             }
         }
-    }
-}
-
-class SnippetListViewModelFactory(
-    private val snippetRepository: SnippetRepository,
-    private val folderRepository: FolderRepository,
-    private val storageService: FileStorageService,
-    private val clipboardManager: ClipboardManager,
-    private val syncEngine: SyncEngine
-) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        @Suppress("UNCHECKED_CAST")
-        return SnippetListViewModel(
-            snippetRepository = snippetRepository,
-            folderRepository = folderRepository,
-            storageService = storageService,
-            clipboardManager = clipboardManager,
-            syncEngine = syncEngine
-        ) as T
     }
 }

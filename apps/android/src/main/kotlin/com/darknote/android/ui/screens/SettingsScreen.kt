@@ -33,9 +33,9 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val authState by authViewModel.authState
-    val authUrl by authViewModel.authUrl
-    val syncLogs by authViewModel.syncLogs
+    val authState by authViewModel.authState.collectAsState()
+    val authUrl by authViewModel.authUrl.collectAsState()
+    val syncLogs by authViewModel.syncLogs.collectAsState()
     val listState = rememberLazyListState()
     
     // State for manual code entry (Joplin style)

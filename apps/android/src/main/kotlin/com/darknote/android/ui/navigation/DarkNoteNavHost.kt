@@ -3,6 +3,7 @@ package com.darknote.android.ui.navigation
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -15,10 +16,11 @@ import com.darknote.android.ui.screens.SettingsScreen
 
 @Composable
 fun DarkNoteNavHost(
-    viewModel: SnippetListViewModel,
-    authViewModel: AuthViewModel,
     navController: NavHostController = rememberNavController()
 ) {
+    val viewModel: SnippetListViewModel = hiltViewModel()
+    val authViewModel: AuthViewModel = hiltViewModel()
+
     NavHost(
         navController = navController,
         startDestination = Screen.Home.route
