@@ -43,13 +43,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.darknote.core.model.Snippet
 
@@ -218,13 +213,13 @@ fun SnippetCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             val contentText = if (snippet.content.length > 120) {
-                snippet.content.take(120) + "…"
+                snippet.content.take(120) + "..."
             } else {
                 snippet.content
             }
 
             Text(
-                text = contentText,
+                text = SyntaxHighlighter.highlight(contentText, snippet.language),
                 style = MaterialTheme.typography.bodySmall.copy(
                     fontFamily = FontFamily.Monospace
                 ),
