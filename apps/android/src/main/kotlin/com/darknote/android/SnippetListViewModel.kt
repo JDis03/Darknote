@@ -123,6 +123,7 @@ class SnippetListViewModel @Inject constructor(
     val recentSearches: StateFlow<List<String>> = _recentSearches.asStateFlow()
 
     val syncState: StateFlow<com.darknote.sync.engine.SyncState> = syncEngine.state
+    val syncLogs: StateFlow<List<com.darknote.sync.engine.SyncLog>> = syncEngine.logs
 
     private val recentSnippets: StateFlow<List<Snippet>> = _allSnippets
         .combine(_selectedFolderId) { snippets, _ ->

@@ -63,6 +63,7 @@ fun DarkNoteNavHost(
         ) {
             SettingsScreen(
                 authViewModel = authViewModel,
+                snippetViewModel = viewModel,
                 onBackClick = { navController.popBackStack() }
             )
         }
