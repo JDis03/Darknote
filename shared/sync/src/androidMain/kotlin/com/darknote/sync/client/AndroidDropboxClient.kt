@@ -57,6 +57,7 @@ class AndroidDropboxClient(
     }
 
     private var client: DbxClientV2? = null
+    private var currentCredential: DbxCredential? = null
     private var pkceWebAuth: DbxPKCEWebAuth? = null
 
     init {
@@ -101,7 +102,7 @@ class AndroidDropboxClient(
     }
 
     override suspend fun listFiles(path: String): Result<List<RemoteFile>> {
-        val dbxClient = client ?: return Result.failure(IllegalStateException("Not authenticated"))
+        val dbxClient = ensureClient() ?: return Result.failure(IllegalStateException("Not authenticated"))
 
         return try {
             withContext(Dispatchers.IO) {
@@ -141,7 +142,7 @@ class AndroidDropboxClient(
     }
 
     override suspend fun uploadFile(localPath: String, remotePath: String): Result<String> {
-        val dbxClient = client ?: return Result.failure(IllegalStateException("Not authenticated"))
+        val dbxClient = ensureClient() ?: return Result.failure(IllegalStateException("Not authenticated"))
 
         return try {
             withContext(Dispatchers.IO) {
@@ -158,7 +159,7 @@ class AndroidDropboxClient(
     }
 
     override suspend fun downloadFile(remotePath: String, localPath: String): Result<Unit> {
-        val dbxClient = client ?: return Result.failure(IllegalStateException("Not authenticated"))
+        val dbxClient = ensureClient() ?: return Result.failure(IllegalStateException("Not authenticated"))
 
         return try {
             withContext(Dispatchers.IO) {
@@ -174,7 +175,7 @@ class AndroidDropboxClient(
     }
 
     override suspend fun deleteFile(remotePath: String): Result<Unit> {
-        val dbxClient = client ?: return Result.failure(IllegalStateException("Not authenticated"))
+        val dbxClient = ensureClient() ?: return Result.failure(IllegalStateException("Not authenticated"))
 
         return try {
             withContext(Dispatchers.IO) {
@@ -187,7 +188,7 @@ class AndroidDropboxClient(
     }
 
     override suspend fun getMetadata(remotePath: String): Result<RemoteMetadata> {
-        val dbxClient = client ?: return Result.failure(IllegalStateException("Not authenticated"))
+        val dbxClient = ensureClient() ?: return Result.failure(IllegalStateException("Not authenticated"))
 
         return try {
             withContext(Dispatchers.IO) {
@@ -215,6 +216,7 @@ class AndroidDropboxClient(
     }
 
     private fun saveCredentials(credential: DbxCredential) {
+        currentCredential = credential
         prefs.edit()
             .putString("access_token", credential.accessToken)
             .putString("refresh_token", credential.refreshToken)
@@ -229,15 +231,45 @@ class AndroidDropboxClient(
 
         try {
             val credential = DbxCredential(accessToken, expiresAt, refreshToken, appKey)
+            currentCredential = credential
             client = DbxClientV2(config, credential)
         } catch (e: Exception) {
             prefs.edit().clear().apply()
+            currentCredential = null
+        }
+    }
+
+    private suspend fun ensureClient(): DbxClientV2? {
+        if (client == null) return null
+
+        val credential = currentCredential ?: return null
+        val expiresAt = credential.expiresAt ?: return client
+
+        if (expiresAt > System.currentTimeMillis() + 60_000L) {
+            return client
+        }
+
+        return try {
+            withContext(Dispatchers.IO) {
+                val refreshed = client!!.refreshAccessToken()
+                saveCredentials(DbxCredential(
+                    refreshed.accessToken,
+                    refreshed.expiresAt,
+                    credential.refreshToken,
+                    appKey
+                ))
+                client = DbxClientV2(config, currentCredential!!)
+                client
+            }
+        } catch (e: Exception) {
+            client
         }
     }
 
     fun logout() {
         prefs.edit().clear().apply()
         client = null
+        currentCredential = null
     }
 }
 
