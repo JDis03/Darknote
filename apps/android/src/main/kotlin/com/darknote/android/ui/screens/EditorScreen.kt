@@ -62,8 +62,8 @@ fun EditorScreen(
     val focusRequester = remember { FocusRequester() }
     val scrollState = rememberScrollState()
 
-    LaunchedEffect(snippet) {
-        snippet?.let {
+    LaunchedEffect(snippetId) {
+        snippets.find { it.id == snippetId }?.let {
             val loaded = viewModel.loadSnippetWithContent(it)
             contentField = TextFieldValue(loaded.content)
             originalContent = loaded.content
