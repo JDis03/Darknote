@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -18,8 +19,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,9 +50,9 @@ fun EditorScreen(
     val snippet = remember(snippetId, snippets) { snippets.find { it.id == snippetId } }
     val scope = rememberCoroutineScope()
 
-    var content by remember { mutableStateOf("") }
+    var contentField by rememberSaveable { mutableStateOf(TextFieldValue("")) }
     var originalContent by remember { mutableStateOf("") }
-    var title by remember { mutableStateOf("") }
+    var titleField by rememberSaveable { mutableStateOf(TextFieldValue("")) }
     var originalTitle by remember { mutableStateOf("") }
     var isModified by remember { mutableStateOf(false) }
     var saveStatus by remember { mutableStateOf(EditorSaveStatus.Idle) }
@@ -61,23 +64,23 @@ fun EditorScreen(
     LaunchedEffect(snippet) {
         snippet?.let {
             val loaded = viewModel.loadSnippetWithContent(it)
-            content = loaded.content
+            contentField = TextFieldValue(loaded.content)
             originalContent = loaded.content
-            title = loaded.title
+            titleField = TextFieldValue(loaded.title)
             originalTitle = loaded.title
         }
     }
 
-    LaunchedEffect(content) {
-        if (content != originalContent) {
+    LaunchedEffect(contentField.text) {
+        if (contentField.text != originalContent) {
             isModified = true
             delay(1500L)
-            if (content != originalContent && snippet != null) {
+            if (contentField.text != originalContent && snippet != null) {
                 saveStatus = EditorSaveStatus.Saving
-                viewModel.updateSnippet(snippet.copy(title = title, content = content))
+                viewModel.updateSnippet(snippet.copy(title = titleField.text, content = contentField.text))
                 saveStatus = EditorSaveStatus.Saved
-                originalContent = content
-                originalTitle = title
+                originalContent = contentField.text
+                originalTitle = titleField.text
                 isModified = false
                 delay(1200L)
                 if (saveStatus == EditorSaveStatus.Saved) saveStatus = EditorSaveStatus.Idle
@@ -85,15 +88,15 @@ fun EditorScreen(
         }
     }
 
-    LaunchedEffect(title) {
-        if (title != originalTitle && title.isNotBlank()) {
+    LaunchedEffect(titleField.text) {
+        if (titleField.text != originalTitle && titleField.text.isNotBlank()) {
             delay(1500L)
-            if (title != originalTitle && snippet != null) {
+            if (titleField.text != originalTitle && snippet != null) {
                 saveStatus = EditorSaveStatus.Saving
-                viewModel.updateSnippet(snippet.copy(title = title, content = content))
+                viewModel.updateSnippet(snippet.copy(title = titleField.text, content = contentField.text))
                 saveStatus = EditorSaveStatus.Saved
-                originalTitle = title
-                originalContent = content
+                originalTitle = titleField.text
+                originalContent = contentField.text
                 delay(1200L)
                 if (saveStatus == EditorSaveStatus.Saved) saveStatus = EditorSaveStatus.Idle
             }
@@ -108,8 +111,8 @@ fun EditorScreen(
     }
 
     val folderName = snippet.folderId?.let { fid -> folders.find { it.id == fid }?.name }
-    val lines = content.lines().size
-    val chars = content.length
+    val lines = contentField.text.lines().size
+    val chars = contentField.text.length
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -118,7 +121,7 @@ fun EditorScreen(
                 title = {
                     Column {
                         Text(
-                            text = title,
+                            text = titleField.text,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,
@@ -253,8 +256,8 @@ fun EditorScreen(
 
                     // Editable title
                     BasicTextField(
-                        value = title,
-                        onValueChange = { title = it },
+                        value = titleField,
+                        onValueChange = { titleField = it },
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(focusRequester),
@@ -277,8 +280,8 @@ fun EditorScreen(
 
                     // Content editor
                     BasicTextField(
-                        value = content,
-                        onValueChange = { content = it },
+                        value = contentField,
+                        onValueChange = { contentField = it },
                         modifier = Modifier.fillMaxWidth(),
                         textStyle = MaterialTheme.typography.bodyMedium.copy(
                             fontFamily = FontFamily.Monospace,
