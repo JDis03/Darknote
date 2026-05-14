@@ -10,6 +10,7 @@ import com.darknote.core.model.SyncStatus
 import com.darknote.core.repository.FolderRepository
 import com.darknote.core.repository.SnippetRepository
 import com.darknote.core.storage.FileStorageService
+import com.darknote.android.network.NetworkMonitor
 import com.darknote.sync.engine.SyncEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -56,7 +57,8 @@ class SnippetListViewModel @Inject constructor(
     private val folderRepository: FolderRepository,
     private val storageService: FileStorageService,
     private val clipboardManager: ClipboardManager,
-    private val syncEngine: SyncEngine
+    private val syncEngine: SyncEngine,
+    private val networkMonitor: NetworkMonitor
 ) : ViewModel() {
 
     private val _allSnippets = MutableStateFlow<List<Snippet>>(emptyList())
@@ -124,6 +126,7 @@ class SnippetListViewModel @Inject constructor(
 
     val syncState: StateFlow<com.darknote.sync.engine.SyncState> = syncEngine.state
     val syncLogs: StateFlow<List<com.darknote.sync.engine.SyncLog>> = syncEngine.logs
+    val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
 
     private val recentSnippets: StateFlow<List<Snippet>> = _allSnippets
         .combine(_selectedFolderId) { snippets, _ ->
@@ -559,6 +562,10 @@ class SnippetListViewModel @Inject constructor(
     private fun triggerSync() {
         viewModelScope.launch {
             try {
+                if (!networkMonitor.isOnline.value) {
+                    Log.d("SnippetListViewModel", "Skipping sync — offline")
+                    return@launch
+                }
                 Log.d("SnippetListViewModel", "Triggering sync...")
                 syncEngine.sync()
                 Log.d("SnippetListViewModel", "Sync completed successfully")
