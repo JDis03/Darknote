@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,9 +51,9 @@ fun EditorScreen(
     val snippet = remember(snippetId, snippets) { snippets.find { it.id == snippetId } }
     val scope = rememberCoroutineScope()
 
-    var contentField by rememberSaveable { mutableStateOf(TextFieldValue("")) }
+    var contentField by rememberSaveable(stateSaver = TextFieldValueSaver) { mutableStateOf(TextFieldValue("")) }
     var originalContent by remember { mutableStateOf("") }
-    var titleField by rememberSaveable { mutableStateOf(TextFieldValue("")) }
+    var titleField by rememberSaveable(stateSaver = TextFieldValueSaver) { mutableStateOf(TextFieldValue("")) }
     var originalTitle by remember { mutableStateOf("") }
     var isModified by remember { mutableStateOf(false) }
     var saveStatus by remember { mutableStateOf(EditorSaveStatus.Idle) }
@@ -364,3 +365,8 @@ fun EditorScreen(
         focusRequester.requestFocus()
     }
 }
+
+private val TextFieldValueSaver = Saver<TextFieldValue, String>(
+    save = { it.text },
+    restore = { TextFieldValue(it) }
+)
