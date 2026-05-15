@@ -61,7 +61,9 @@ class SnippetListViewModel @Inject constructor(
     private val networkMonitor: NetworkMonitor
 ) : ViewModel() {
 
-    private val _allSnippets = MutableStateFlow<List<Snippet>>(emptyList())
+    private val _allSnippets = snippetRepository.getAll()
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     private val _searchQuery = MutableStateFlow("")
     private val _showFavoritesOnly = MutableStateFlow(false)
     private val _sortOrder = MutableStateFlow(SortOrder.MODIFIED_DESC)
@@ -138,7 +140,6 @@ class SnippetListViewModel @Inject constructor(
     private val DELETION_RETENTION_MS = 5 * 60 * 1000L // 5 minutes
 
     init {
-        loadSnippets()
         loadFolders()
         initialSync()
     }
@@ -150,7 +151,7 @@ class SnippetListViewModel @Inject constructor(
                 syncEngine.sync()
                 Log.d("SnippetListViewModel", "Initial sync completed")
                 // Refresh UI after pulling remote data
-                loadSnippets()
+                // Snippets auto-refresh via reactive Flow
                 loadFolders()
             } catch (e: Exception) {
                 Log.w("SnippetListViewModel", "Initial sync failed: ${e.message}")
@@ -158,15 +159,7 @@ class SnippetListViewModel @Inject constructor(
         }
     }
 
-    private fun loadSnippets() {
-        viewModelScope.launch {
-            snippetRepository.getAll()
-                .catch { emit(emptyList()) }
-                .collect { snippets ->
-                    _allSnippets.value = snippets
-                }
-        }
-    }
+
 
     private fun loadFolders() {
         viewModelScope.launch {
@@ -333,7 +326,7 @@ class SnippetListViewModel @Inject constructor(
                 }
                 
                 // Refresh the list to show new snippet
-                loadSnippets()
+                // Snippets auto-refresh via reactive Flow
                 _createState.value = CreateSnippetState.Created
                 
                 // Trigger sync after create
@@ -361,7 +354,7 @@ class SnippetListViewModel @Inject constructor(
                     return@launch
                 }
                 
-                loadSnippets()
+                // Snippets auto-refresh via reactive Flow
                 triggerSync()
                 showSnackbar(SnackbarData("Snippet renamed to \"$newTitle\""))
             } catch (e: Exception) {
@@ -395,10 +388,6 @@ class SnippetListViewModel @Inject constructor(
                 }
                 Log.d("SnippetListViewModel", "Storage update successful")
                 
-                // Refresh the list to show updated content
-                loadSnippets()
-                Log.d("SnippetListViewModel", "Snippet list refreshed")
-                
                 // Trigger sync after update
                 triggerSync()
                 
@@ -414,7 +403,7 @@ class SnippetListViewModel @Inject constructor(
         _isRefreshing.value = true
         viewModelScope.launch {
             kotlinx.coroutines.delay(800)
-            loadSnippets()
+            // Snippets auto-refresh via reactive Flow
             loadFolders()
             _isRefreshing.value = false
         }
@@ -470,7 +459,7 @@ class SnippetListViewModel @Inject constructor(
                 Log.d("SnippetListViewModel", "Manual sync triggered")
                 syncEngine.sync()
                 Log.d("SnippetListViewModel", "Manual sync completed")
-                loadSnippets()
+                // Snippets auto-refresh via reactive Flow
                 loadFolders()
                 showSnackbar(SnackbarData("Sync complete"))
             } catch (e: Exception) {
