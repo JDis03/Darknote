@@ -26,6 +26,7 @@ kotlin {
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.0")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
             implementation("com.benasher44:uuid:0.8.4")
+            implementation("io.insert-koin:koin-core:3.5.3")
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
