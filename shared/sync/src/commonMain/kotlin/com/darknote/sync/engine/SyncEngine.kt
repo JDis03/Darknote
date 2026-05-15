@@ -72,12 +72,20 @@ class SyncEngine(
                 addLog("Found ${localChanges.size} local changes, ${remoteChanges.size} remote changes", SyncLogType.INFO)
                 addLog("Found ${localDeletions.size} local deletions, ${remoteDeletions.size} remote deletions", SyncLogType.INFO)
 
-                // Step 3.5: Process deletions first
+                // Step 3.5: Process deletions (but avoid conflicts)
                 _progress.value = SyncProgress(2, 6, "Processing deletions...")
-                processLocalDeletions(localDeletions)
-                processRemoteDeletions(remoteDeletions)
+                
+                // Don't delete remote files if there's a corresponding remote change (conflict: local delete vs remote update)
+                val remoteChangedIds = remoteChanges.map { extractSnippetIdFromPath(it.file.path) }.toSet()
+                val safeLocalDeletions = localDeletions.filter { it !in remoteChangedIds }
+                processLocalDeletions(safeLocalDeletions)
+                
+                // Don't delete local snippets if there's a corresponding local change (conflict: local update vs remote delete)
+                val localChangedIds = localChanges.map { it.snippet.id }.toSet()
+                val safeRemoteDeletions = remoteDeletions.filter { it !in localChangedIds }
+                processRemoteDeletions(safeRemoteDeletions)
 
-                // Step 4: Resolve conflicts
+                // Step 5: Resolve conflicts
                 _progress.value = SyncProgress(3, 6, "Resolving conflicts...")
                 val resolvedChanges = resolveConflicts(localChanges, remoteChanges)
 
