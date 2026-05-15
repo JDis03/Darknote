@@ -53,6 +53,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.darknote.core.model.Folder
@@ -392,7 +394,12 @@ fun EditSnippetSheet(
     onSave: (Snippet) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var title by remember { mutableStateOf(snippet.title) }
+    var title by remember {
+        mutableStateOf(TextFieldValue(
+            text = snippet.title,
+            selection = TextRange(snippet.title.length) // cursor at end, not start
+        ))
+    }
     var content by remember { mutableStateOf(snippet.content) }
     var language by remember { mutableStateOf(snippet.language ?: "") }
     var tags by remember { mutableStateOf(snippet.tags.joinToString(", ")) }
@@ -427,7 +434,7 @@ fun EditSnippetSheet(
                 label = { Text("Title") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium
+                shape = MaterialTheme.shapes.medium,
             )
 
             if (folders.isNotEmpty()) {
@@ -494,13 +501,13 @@ fun EditSnippetSheet(
 
                 FilledTonalButton(
                     onClick = {
-                        if (title.isNotBlank()) {
+                        if (title.text.isNotBlank()) {
                             val tagList = tags.split(",")
                                 .map { it.trim() }
                                 .filter { it.isNotBlank() }
                             onSave(
                                 snippet.copy(
-                                    title = title,
+                                    title = title.text,
                                     content = content,
                                     language = language.ifBlank { null },
                                     tags = tagList,
@@ -511,7 +518,7 @@ fun EditSnippetSheet(
                         }
                     },
                     modifier = Modifier.weight(1f),
-                    enabled = title.isNotBlank()
+                    enabled = title.text.isNotBlank()
                 ) {
                     Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))

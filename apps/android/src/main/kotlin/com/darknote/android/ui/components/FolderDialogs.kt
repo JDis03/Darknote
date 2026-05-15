@@ -7,6 +7,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.darknote.core.model.Folder
 import com.darknote.core.model.Snippet
@@ -17,8 +19,13 @@ fun RenameSnippetDialog(
     onRename: (id: String, newTitle: String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var newTitle by remember { mutableStateOf(snippet.title) }
-    
+    var newTitle by remember {
+        mutableStateOf(TextFieldValue(
+            text = snippet.title,
+            selection = TextRange(snippet.title.length) // cursor at end, not start
+        ))
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Rename Snippet") },
@@ -33,8 +40,8 @@ fun RenameSnippetDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { if (newTitle.isNotBlank() && newTitle != snippet.title) onRename(snippet.id, newTitle) },
-                enabled = newTitle.isNotBlank() && newTitle != snippet.title
+                onClick = { if (newTitle.text.isNotBlank() && newTitle.text != snippet.title) onRename(snippet.id, newTitle.text) },
+                enabled = newTitle.text.isNotBlank() && newTitle.text != snippet.title
             ) { 
                 Text("Rename") 
             }
@@ -130,8 +137,13 @@ fun RenameFolderDialog(
     onRename: (id: String, newName: String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var newName by remember { mutableStateOf(folder.name) }
-    
+    var newName by remember {
+        mutableStateOf(TextFieldValue(
+            text = folder.name,
+            selection = TextRange(folder.name.length) // cursor at end, not start
+        ))
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Rename Folder") },
@@ -146,8 +158,8 @@ fun RenameFolderDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { if (newName.isNotBlank() && newName != folder.name) onRename(folder.id, newName) },
-                enabled = newName.isNotBlank() && newName != folder.name
+                onClick = { if (newName.text.isNotBlank() && newName.text != folder.name) onRename(folder.id, newName.text) },
+                enabled = newName.text.isNotBlank() && newName.text != folder.name
             ) { 
                 Text("Rename") 
             }
