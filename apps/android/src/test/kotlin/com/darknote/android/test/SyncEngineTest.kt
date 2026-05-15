@@ -2,6 +2,8 @@ package com.darknote.android.test
 
 import com.darknote.core.model.Snippet
 import com.darknote.core.model.SyncMetadata
+import com.darknote.core.repository.DeletedSnippet
+import com.darknote.core.repository.DeletedSnippetRepository
 import com.darknote.core.repository.FolderRepository
 import com.darknote.core.repository.SnippetRepository
 import com.darknote.core.repository.SyncMetadataRepository
@@ -29,6 +31,7 @@ class SyncEngineTest {
     private val snippetRepository = mockk<SnippetRepository>(relaxed = true)
     private val folderRepository = mockk<FolderRepository>(relaxed = true)
     private val syncMetadataRepository = mockk<SyncMetadataRepository>(relaxed = true)
+    private val deletedSnippetRepository = mockk<DeletedSnippetRepository>(relaxed = true)
     private val storageService = mockk<FileStorageService>(relaxed = true)
 
     private fun createEngine(): SyncEngine = SyncEngine(
@@ -36,6 +39,7 @@ class SyncEngineTest {
         snippetRepository = snippetRepository,
         folderRepository = folderRepository,
         syncMetadataRepository = syncMetadataRepository,
+        deletedSnippetRepository = deletedSnippetRepository,
         storageService = storageService
     )
 
@@ -62,6 +66,7 @@ class SyncEngineTest {
         every { dropboxClient.isAuthorized() } returns true
         coEvery { snippetRepository.getAllCached() } returns emptyList()
         coEvery { syncMetadataRepository.getAll() } returns emptyList()
+        coEvery { deletedSnippetRepository.getAll() } returns emptyList()
         coEvery { dropboxClient.listFiles("/darknote") } returns Result.success(emptyList())
         coEvery { storageService.saveSnippetContent(any()) } returns Result.success(Unit)
         coEvery { storageService.loadSnippetContent(any()) } returns Result.success("")
@@ -83,6 +88,7 @@ class SyncEngineTest {
         every { dropboxClient.isAuthorized() } returns true
         coEvery { snippetRepository.getAllCached() } returns listOf(snippet)
         coEvery { syncMetadataRepository.getAll() } returns emptyList()
+        coEvery { deletedSnippetRepository.getAll() } returns emptyList()
         coEvery { syncMetadataRepository.getBySnippetId("snip-1") } returns null
         coEvery { dropboxClient.listFiles("/darknote") } returns Result.success(emptyList())
         coEvery { storageService.saveSnippetContent(any()) } returns Result.success(Unit)
@@ -116,6 +122,7 @@ class SyncEngineTest {
         every { dropboxClient.isAuthorized() } returns true
         coEvery { snippetRepository.getAllCached() } returns listOf(snippet)
         coEvery { syncMetadataRepository.getAll() } returns listOf(metadata)
+        coEvery { deletedSnippetRepository.getAll() } returns emptyList()
         coEvery { syncMetadataRepository.getBySnippetId("snip-2") } returns metadata
         coEvery { dropboxClient.listFiles("/darknote") } returns Result.success(emptyList())
         coEvery { storageService.saveSnippetContent(any()) } returns Result.success(Unit)
@@ -149,6 +156,7 @@ class SyncEngineTest {
         every { dropboxClient.isAuthorized() } returns true
         coEvery { snippetRepository.getAllCached() } returns listOf(snippet)
         coEvery { syncMetadataRepository.getAll() } returns listOf(metadata)
+        coEvery { deletedSnippetRepository.getAll() } returns emptyList()
         coEvery { syncMetadataRepository.getBySnippetId("snip-3") } returns metadata
         coEvery { dropboxClient.listFiles("/darknote") } returns Result.success(
             listOf(
@@ -176,6 +184,7 @@ class SyncEngineTest {
         every { dropboxClient.isAuthorized() } returns true
         coEvery { snippetRepository.getAllCached() } throws RuntimeException("Database crashed")
         coEvery { syncMetadataRepository.getAll() } returns emptyList()
+        coEvery { deletedSnippetRepository.getAll() } returns emptyList()
         coEvery { dropboxClient.listFiles("/darknote") } returns Result.success(emptyList())
         coEvery { storageService.saveSnippetContent(any()) } returns Result.success(Unit)
         coEvery { storageService.loadSnippetContent(any()) } returns Result.success("")
@@ -191,6 +200,7 @@ class SyncEngineTest {
         every { dropboxClient.isAuthorized() } returns true
         coEvery { snippetRepository.getAllCached() } returns emptyList()
         coEvery { syncMetadataRepository.getAll() } returns emptyList()
+        coEvery { deletedSnippetRepository.getAll() } returns emptyList()
         coEvery { dropboxClient.listFiles("/darknote") } returns Result.success(emptyList())
         coEvery { storageService.saveSnippetContent(any()) } returns Result.success(Unit)
         coEvery { storageService.loadSnippetContent(any()) } returns Result.success("")
@@ -203,18 +213,22 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `detects local deletions`() = runTest {
-        val metadata = SyncMetadata(
-            snippetId = "deleted-snip",
-            remoteRevision = "rev-old",
-            lastSyncTime = 1000L,
-            syncStatus = com.darknote.core.model.SyncStatus.SYNCED
+    fun `local deletion tombstone triggers remote delete`() = runTest {
+        // Tombstone is older than remote file → local deletion wins
+        val tombstone = DeletedSnippet(id = "deleted-snip", deletedAt = 5000L)
+        val remoteFile = RemoteFile(
+            path = "/darknote/deleted-snip.txt",
+            name = "deleted-snip.txt",
+            modifiedTime = 1000L, // older than tombstone → local delete wins
+            size = 100,
+            rev = "rev-old"
         )
 
         every { dropboxClient.isAuthorized() } returns true
         coEvery { snippetRepository.getAllCached() } returns emptyList()
-        coEvery { syncMetadataRepository.getAll() } returns listOf(metadata)
-        coEvery { dropboxClient.listFiles("/darknote") } returns Result.success(emptyList())
+        coEvery { syncMetadataRepository.getAll() } returns emptyList()
+        coEvery { deletedSnippetRepository.getAll() } returns listOf(tombstone)
+        coEvery { dropboxClient.listFiles("/darknote") } returns Result.success(listOf(remoteFile))
         coEvery { storageService.saveSnippetContent(any()) } returns Result.success(Unit)
         coEvery { storageService.loadSnippetContent(any()) } returns Result.success("")
         coEvery { dropboxClient.deleteFile("/darknote/deleted-snip.txt") } returns Result.success(Unit)
@@ -223,7 +237,73 @@ class SyncEngineTest {
         val engine = createEngine()
         engine.sync()
 
+        // Should delete from remote and clear tombstone
         coVerify { dropboxClient.deleteFile("/darknote/deleted-snip.txt") }
         coVerify { syncMetadataRepository.delete("deleted-snip") }
+        coVerify { deletedSnippetRepository.delete("deleted-snip") }
+        assertTrue(engine.state.value is SyncState.Synced)
+    }
+
+    @Test
+    fun `deletion conflict - remote newer than tombstone restores snippet`() = runTest {
+        // Remote was modified AFTER local deletion → remote wins, restore
+        val tombstone = DeletedSnippet(id = "conflict-snip", deletedAt = 1000L)
+        val remoteFile = RemoteFile(
+            path = "/darknote/conflict-snip.txt",
+            name = "conflict-snip.txt",
+            modifiedTime = 9000L, // NEWER than tombstone → remote wins
+            size = 100,
+            rev = "rev-new"
+        )
+
+        every { dropboxClient.isAuthorized() } returns true
+        coEvery { snippetRepository.getAllCached() } returns emptyList()
+        coEvery { syncMetadataRepository.getAll() } returns emptyList()
+        coEvery { deletedSnippetRepository.getAll() } returns listOf(tombstone)
+        coEvery { dropboxClient.listFiles("/darknote") } returns Result.success(listOf(remoteFile))
+        coEvery { storageService.saveSnippetContent(any()) } returns Result.success(Unit)
+        coEvery { storageService.loadSnippetContent(any()) } returns Result.success("")
+        coEvery { dropboxClient.downloadFile(any(), any()) } returns Result.success(Unit)
+        coEvery { snippetRepository.create(any()) } returns Result.success(Unit)
+        coEvery { snippetRepository.getByIdCached(any()) } returns null
+
+        val engine = createEngine()
+        engine.sync()
+
+        // Should NOT delete from remote
+        coVerify(exactly = 0) { dropboxClient.deleteFile(any()) }
+        // Should clear tombstone to allow re-download
+        coVerify { deletedSnippetRepository.delete("conflict-snip") }
+        assertTrue(engine.state.value is SyncState.Synced)
+    }
+
+    @Test
+    fun `tombstoned snippets are not re-downloaded`() = runTest {
+        // Snippet has a tombstone AND exists on remote with older timestamp → should be deleted, not downloaded
+        val tombstone = DeletedSnippet(id = "old-snip", deletedAt = 9000L)
+        val remoteFile = RemoteFile(
+            path = "/darknote/old-snip.txt",
+            name = "old-snip.txt",
+            modifiedTime = 1000L, // older than tombstone
+            size = 100,
+            rev = "rev-old"
+        )
+
+        every { dropboxClient.isAuthorized() } returns true
+        coEvery { snippetRepository.getAllCached() } returns emptyList()
+        coEvery { syncMetadataRepository.getAll() } returns emptyList()
+        coEvery { deletedSnippetRepository.getAll() } returns listOf(tombstone)
+        coEvery { dropboxClient.listFiles("/darknote") } returns Result.success(listOf(remoteFile))
+        coEvery { storageService.saveSnippetContent(any()) } returns Result.success(Unit)
+        coEvery { storageService.loadSnippetContent(any()) } returns Result.success("")
+        coEvery { dropboxClient.deleteFile(any()) } returns Result.success(Unit)
+
+        val engine = createEngine()
+        engine.sync()
+
+        // Should delete from remote
+        coVerify { dropboxClient.deleteFile("/darknote/old-snip.txt") }
+        // Should NOT download the file
+        coVerify(exactly = 0) { dropboxClient.downloadFile(any(), any()) }
     }
 }

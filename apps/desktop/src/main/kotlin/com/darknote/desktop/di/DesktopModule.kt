@@ -1,6 +1,7 @@
 package com.darknote.desktop.di
 
 import com.darknote.core.clipboard.ClipboardManager
+import com.darknote.core.repository.DeletedSnippetRepository
 import com.darknote.core.repository.FolderRepository
 import com.darknote.core.repository.SnippetRepository
 import com.darknote.core.repository.SyncMetadataRepository
@@ -10,6 +11,7 @@ import com.darknote.desktop.platform.DesktopFileStorageFactory
 import com.darknote.desktop.viewmodel.SnippetListViewModel
 import com.darknote.persistence.DatabaseDriverFactory
 import com.darknote.persistence.database.DarkNoteDatabase
+import com.darknote.persistence.repository.DeletedSnippetRepositoryImpl
 import com.darknote.persistence.repository.FolderRepositoryImpl
 import com.darknote.persistence.repository.SnippetRepositoryImpl
 import com.darknote.persistence.repository.SyncMetadataRepositoryImpl
@@ -29,6 +31,7 @@ val desktopModule = module {
     single<SnippetRepository> { SnippetRepositoryImpl(get()) }
     single<FolderRepository> { FolderRepositoryImpl(get()) }
     single<SyncMetadataRepository> { SyncMetadataRepositoryImpl(get()) }
+    single<DeletedSnippetRepository> { DeletedSnippetRepositoryImpl(get()) }
     
     // Storage & Platform
     single<FileStorageService> { DesktopFileStorageFactory.create() }
@@ -42,6 +45,7 @@ val desktopModule = module {
             snippetRepository = get(),
             folderRepository = get(),
             syncMetadataRepository = get(),
+            deletedSnippetRepository = get(),
             storageService = get()
         )
     }

@@ -1,5 +1,6 @@
 package com.darknote.android.di
 
+import com.darknote.core.repository.DeletedSnippetRepository
 import com.darknote.core.repository.FolderRepository
 import com.darknote.core.repository.SnippetRepository
 import com.darknote.core.repository.SyncMetadataRepository
@@ -28,12 +29,14 @@ object SyncModule {
         snippetRepository: SnippetRepository,
         folderRepository: FolderRepository,
         syncMetadataRepository: SyncMetadataRepository,
+        deletedSnippetRepository: DeletedSnippetRepository,
         storageService: FileStorageService
     ): SyncEngine = SyncEngine(
         dropboxClient = dropboxClient,
         snippetRepository = snippetRepository,
         folderRepository = folderRepository,
         syncMetadataRepository = syncMetadataRepository,
+        deletedSnippetRepository = deletedSnippetRepository,
         storageService = storageService
     )
 }

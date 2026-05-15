@@ -1,6 +1,7 @@
 package com.darknote.android.di
 
 import android.content.Context
+import com.darknote.core.repository.DeletedSnippetRepository
 import com.darknote.core.repository.FolderRepository
 import com.darknote.core.repository.SnippetRepository
 import com.darknote.core.repository.SyncMetadataRepository
@@ -42,4 +43,9 @@ object DatabaseModule {
     @Singleton
     fun provideSyncMetadataRepository(databaseFactory: DatabaseFactory): SyncMetadataRepository =
         databaseFactory.syncMetadataRepository
+
+    @Provides
+    @Singleton
+    fun provideDeletedSnippetRepository(databaseFactory: DatabaseFactory): DeletedSnippetRepository =
+        databaseFactory.deletedSnippetRepository
 }

@@ -1,8 +1,10 @@
 package com.darknote.persistence.database
 
+import com.darknote.persistence.repository.DeletedSnippetRepositoryImpl
 import com.darknote.persistence.repository.FolderRepositoryImpl
 import com.darknote.persistence.repository.SnippetRepositoryImpl
 import com.darknote.persistence.repository.SyncMetadataRepositoryImpl
+import com.darknote.core.repository.DeletedSnippetRepository
 import com.darknote.core.repository.FolderRepository
 import com.darknote.core.repository.SnippetRepository
 import com.darknote.core.repository.SyncMetadataRepository
@@ -24,5 +26,9 @@ class DatabaseFactory(
 
     val syncMetadataRepository: SyncMetadataRepository by lazy {
         SyncMetadataRepositoryImpl(database)
+    }
+
+    val deletedSnippetRepository: DeletedSnippetRepository by lazy {
+        DeletedSnippetRepositoryImpl(database)
     }
 }

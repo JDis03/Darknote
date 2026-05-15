@@ -46,6 +46,14 @@ CREATE TABLE IF NOT EXISTS tag (
     created_at INTEGER NOT NULL
 );
 
+-- Tombstone table: tracks locally-deleted snippets until remote deletion is confirmed.
+-- This prevents re-downloading snippets the user intentionally deleted.
+-- Inspired by Joplin's deleted_items table.
+CREATE TABLE IF NOT EXISTS deleted_snippet (
+    id TEXT PRIMARY KEY,
+    deleted_at INTEGER NOT NULL -- epoch ms of local deletion
+);
+
 -- User settings
 CREATE TABLE IF NOT EXISTS clipboard_settings (
     id INTEGER PRIMARY KEY CHECK (id = 1), -- Singleton
@@ -186,3 +194,16 @@ updateSnippetMetadataLastSync:
 UPDATE snippet_metadata
 SET last_sync_at = ?
 WHERE snippet_id = ?;
+
+-- Tombstone queries
+insertDeletedSnippet:
+INSERT OR IGNORE INTO deleted_snippet (id, deleted_at) VALUES (?, ?);
+
+selectAllDeletedSnippets:
+SELECT * FROM deleted_snippet;
+
+selectDeletedSnippetById:
+SELECT * FROM deleted_snippet WHERE id = ?;
+
+deleteDeletedSnippet:
+DELETE FROM deleted_snippet WHERE id = ?;
