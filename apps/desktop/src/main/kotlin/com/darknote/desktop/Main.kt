@@ -18,7 +18,7 @@ import com.darknote.core.model.Snippet
 import com.darknote.desktop.di.desktopModule
 import com.darknote.desktop.di.initKoin
 import com.darknote.desktop.platform.KDEIntegration
-import com.darknote.desktop.ui.screens.EditorScreen
+import com.darknote.desktop.ui.screens.AdvancedEditorScreen
 import com.darknote.desktop.ui.screens.SnippetListScreen
 import com.darknote.desktop.viewmodel.SnippetListViewModel
 import kotlinx.coroutines.launch
@@ -84,7 +84,7 @@ fun App() {
                     currentScreen = Screen.Editor(snippetId)
                 }
             )
-            is Screen.Editor -> EditorScreen(
+            is Screen.Editor -> AdvancedEditorScreen(
                 snippetId = screen.snippetId,
                 viewModel = viewModel,
                 onBack = { currentScreen = Screen.List }
