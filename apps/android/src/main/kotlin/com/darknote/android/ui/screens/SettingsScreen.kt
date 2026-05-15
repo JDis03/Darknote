@@ -17,7 +17,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ClipboardManager
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -46,6 +49,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val authState by authViewModel.authState.collectAsState()
     val authUrl by authViewModel.authUrl.collectAsState()
     val authLogs by authViewModel.syncLogs.collectAsState()
@@ -319,11 +323,26 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium
                         )
-                        
-                        TextButton(
-                            onClick = { authViewModel.clearLogs() }
-                        ) {
-                            Text("Clear")
+
+                        Row {
+                            TextButton(
+                                onClick = {
+                                    val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                                    val text = unifiedLogs.joinToString("\n") { log ->
+                                        "${sdf.format(Date(log.timestamp))} ${log.source}:${log.type.name} ${log.message}"
+                                    }
+                                    clipboardManager.setText(AnnotatedString(text))
+                                },
+                                enabled = unifiedLogs.isNotEmpty()
+                            ) {
+                                Text("Copy")
+                            }
+
+                            TextButton(
+                                onClick = { authViewModel.clearLogs() }
+                            ) {
+                                Text("Clear")
+                            }
                         }
                     }
 
