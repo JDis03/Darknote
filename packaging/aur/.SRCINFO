@@ -1,0 +1,17 @@
+pkgbase = darknote
+	pkgdesc = Modern snippet manager with Dropbox sync - Desktop app for Linux
+	pkgver = 1.0.0
+	pkgrel = 1
+	url = https://github.com/yourusername/darknote
+	arch = x86_64
+	license = GPL3
+	makedepends = jdk17-openjdk
+	makedepends = gradle
+	depends = java-runtime>=17
+	depends = sqlite
+	optdepends = plasma-desktop: KDE Plasma integration
+	optdepends = breeze: Native theme support
+	source = darknote-1.0.0.tar.gz::https://github.com/yourusername/darknote/archive/v1.0.0.tar.gz
+	sha256sums = SKIP
+
+pkgname = darknote
