@@ -19,6 +19,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
@@ -59,15 +62,22 @@ fun EditorScreen(
     var saveStatus by remember { mutableStateOf(EditorSaveStatus.Idle) }
     var showMoreSheet by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val focusRequester = remember { FocusRequester() }
+    val focusRequester = remember { FocusRequester() }        // title
+    val contentFocusRequester = remember { FocusRequester() } // content
     val scrollState = rememberScrollState()
 
     LaunchedEffect(snippetId) {
         snippets.find { it.id == snippetId }?.let {
             val loaded = viewModel.loadSnippetWithContent(it)
-            contentField = TextFieldValue(loaded.content)
+            contentField = TextFieldValue(
+                text = loaded.content,
+                selection = TextRange(loaded.content.length)
+            )
             originalContent = loaded.content
-            titleField = TextFieldValue(loaded.title)
+            titleField = TextFieldValue(
+                text = loaded.title,
+                selection = TextRange(loaded.title.length) // cursor at end, not start
+            )
             originalTitle = loaded.title
         }
     }
@@ -268,6 +278,10 @@ fun EditorScreen(
                                 lineHeight = 28.sp,
                                 color = MaterialTheme.colorScheme.onSurface
                             ),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { contentFocusRequester.requestFocus() }
+                            ),
                             decorationBox = { innerTextField ->
                                 if (titleField.text.isEmpty()) {
                                     Text(
@@ -298,7 +312,9 @@ fun EditorScreen(
                         BasicTextField(
                             value = contentField,
                             onValueChange = { contentField = it },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(contentFocusRequester),
                             textStyle = MaterialTheme.typography.bodyMedium.copy(
                                 fontFamily = FontFamily.Monospace,
                                 lineHeight = 22.sp,
@@ -383,6 +399,16 @@ fun EditorScreen(
 }
 
 private val TextFieldValueSaver = Saver<TextFieldValue, String>(
-    save = { it.text },
-    restore = { TextFieldValue(it) }
+    save = { "${it.selection.start},${it.selection.end}|${it.text}" },
+    restore = { saved ->
+        val separatorIdx = saved.indexOf('|')
+        val text = saved.substring(separatorIdx + 1)
+        val selection = runCatching {
+            val parts = saved.substring(0, separatorIdx).split(",")
+            val start = parts[0].toInt().coerceIn(0, text.length)
+            val end = parts[1].toInt().coerceIn(0, text.length)
+            TextRange(start, end)
+        }.getOrElse { TextRange(text.length) }
+        TextFieldValue(text = text, selection = selection)
+    }
 )
