@@ -255,20 +255,34 @@ fun EditorScreen(
                         }
                     }
 
-                    // Editable title
-                    BasicTextField(
-                        value = titleField,
-                        onValueChange = { titleField = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focusRequester),
-                        textStyle = MaterialTheme.typography.headlineSmall.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            lineHeight = 28.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        ),
-                        singleLine = true
-                    )
+                    // Editable title (keyed by snippetId to prevent recreation on snippet updates)
+                    key(snippetId) {
+                        BasicTextField(
+                            value = titleField,
+                            onValueChange = { titleField = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester),
+                            textStyle = MaterialTheme.typography.headlineSmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                lineHeight = 28.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            decorationBox = { innerTextField ->
+                                if (titleField.text.isEmpty()) {
+                                    Text(
+                                        text = "Untitled",
+                                        style = MaterialTheme.typography.headlineSmall.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            lineHeight = 28.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                        )
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        )
+                    }
 
                     Spacer(Modifier.height(8.dp))
 
@@ -279,17 +293,19 @@ fun EditorScreen(
 
                     Spacer(Modifier.height(12.dp))
 
-                    // Content editor
-                    BasicTextField(
-                        value = contentField,
-                        onValueChange = { contentField = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            fontFamily = FontFamily.Monospace,
-                            lineHeight = 22.sp,
-                            color = MaterialTheme.colorScheme.onSurface
+                    // Content editor (keyed by snippetId to prevent recreation on snippet updates)
+                    key(snippetId) {
+                        BasicTextField(
+                            value = contentField,
+                            onValueChange = { contentField = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 22.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
                         )
-                    )
+                    }
 
                     Spacer(Modifier.height(80.dp))
                 }
