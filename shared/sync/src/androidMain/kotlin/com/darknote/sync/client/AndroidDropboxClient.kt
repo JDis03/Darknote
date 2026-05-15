@@ -69,7 +69,18 @@ class AndroidDropboxClient(
         if (client == null) {
             loadClient()
         }
-        return client != null
+        
+        // Check if token is expired
+        val credential = currentCredential ?: return false
+        val expiresAt = credential.expiresAt
+        
+        // If no expiration or refresh token exists, consider authorized
+        if (expiresAt == null || credential.refreshToken != null) {
+            return client != null
+        }
+        
+        // If token expired and no refresh token, not authorized
+        return expiresAt > System.currentTimeMillis()
     }
 
     override fun getAuthUrl(): String {
@@ -245,25 +256,28 @@ class AndroidDropboxClient(
         val credential = currentCredential ?: return null
         val expiresAt = credential.expiresAt ?: return client
 
-        if (expiresAt > System.currentTimeMillis() + 60_000L) {
-            return client
+        // If token expires within 60 seconds, refresh it
+        if (expiresAt < System.currentTimeMillis() + 60_000L) {
+            return try {
+                withContext(Dispatchers.IO) {
+                    val refreshed = client!!.refreshAccessToken()
+                    saveCredentials(DbxCredential(
+                        refreshed.accessToken,
+                        refreshed.expiresAt,
+                        credential.refreshToken,
+                        appKey
+                    ))
+                    client = DbxClientV2(config, currentCredential!!)
+                    client
+                }
+            } catch (e: Exception) {
+                // Refresh failed - clear auth and return null to trigger re-auth
+                logout()
+                null
+            }
         }
 
-        return try {
-            withContext(Dispatchers.IO) {
-                val refreshed = client!!.refreshAccessToken()
-                saveCredentials(DbxCredential(
-                    refreshed.accessToken,
-                    refreshed.expiresAt,
-                    credential.refreshToken,
-                    appKey
-                ))
-                client = DbxClientV2(config, currentCredential!!)
-                client
-            }
-        } catch (e: Exception) {
-            client
-        }
+        return client
     }
 
     fun logout() {
