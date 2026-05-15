@@ -1,0 +1,8 @@
+-- Migration 1 -> 2
+-- Add tombstone table for tracking locally-deleted snippets
+-- Prevents re-downloading snippets the user intentionally deleted during sync
+
+CREATE TABLE IF NOT EXISTS deleted_snippet (
+    id TEXT PRIMARY KEY,
+    deleted_at INTEGER NOT NULL
+);
