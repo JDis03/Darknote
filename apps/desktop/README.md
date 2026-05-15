@@ -9,6 +9,7 @@ Modern snippet manager with Dropbox sync - Desktop edition built with Compose Mu
 - **Auto-save** - Changes saved automatically as you type
 - **Search & Filter** - Find snippets quickly
 - **Material 3 Design** - Modern dark theme UI
+- **KDE Integration** - Breeze theme support, native look on KDE Plasma
 - **Cross-platform** - Linux, macOS, Windows support
 
 ## Requirements
@@ -16,38 +17,62 @@ Modern snippet manager with Dropbox sync - Desktop edition built with Compose Mu
 - JDK 17 or higher
 - Gradle 8.0+
 
-## Building
+## Installation
 
-### Run in development
+### KDE Plasma (Recommended for Arch Linux + KDE)
+
+Quick install for KDE users:
+
+```bash
+# 1. Build the JAR
+./gradlew :apps:desktop:jar
+
+# 2. Run install script
+cd apps/desktop/packaging
+./install-kde.sh
+```
+
+This will:
+- Install desktop entry with KDE integration
+- Add launcher to Application Menu
+- Configure Breeze theme colors
+- Set up right-click actions (New Snippet, Search)
+
+**Uninstall:**
+```bash
+cd apps/desktop/packaging
+./uninstall-kde.sh
+```
+
+### Manual Installation (All Linux)
+
+#### Using package managers
+
+**Debian/Ubuntu (.deb)**
+```bash
+./gradlew :apps:desktop:packageDeb
+sudo dpkg -i apps/desktop/build/compose/binaries/main/deb/*.deb
+```
+
+**Arch Linux (.rpm → convert to pkg)**
+```bash
+./gradlew :apps:desktop:packageRpm
+# Use alien or manually extract
+```
+
+**Universal (AppImage)**
+```bash
+./gradlew :apps:desktop:packageAppImage
+chmod +x apps/desktop/build/compose/binaries/main/app-image/*.AppImage
+./apps/desktop/build/compose/binaries/main/app-image/*.AppImage
+```
+
+### Development
+
+Run without installation:
 ```bash
 ./gradlew :apps:desktop:run
 ```
-
-### Create distributable package
-
-#### Linux (.deb for Debian/Ubuntu)
-```bash
-./gradlew :apps:desktop:packageDeb
-```
-Output: `apps/desktop/build/compose/binaries/main/deb/`
-
-#### Linux (.rpm for Fedora/RHEL/Arch)
-```bash
-./gradlew :apps:desktop:packageRpm
-```
-Output: `apps/desktop/build/compose/binaries/main/rpm/`
-
-#### AppImage (universal Linux)
-```bash
-./gradlew :apps:desktop:packageAppImage
-```
-Output: `apps/desktop/build/compose/binaries/main/app-image/`
-
-### Create distributable folder
-```bash
-./gradlew :apps:desktop:createDistributable
-```
-Output: `apps/desktop/build/compose/binaries/main/app/`
 
 ## Architecture
 
@@ -58,6 +83,17 @@ Output: `apps/desktop/build/compose/binaries/main/app/`
 - **DI**: Koin
 - **Sync**: Dropbox SDK (Java)
 - **Storage**: Platform-specific (XDG dirs on Linux)
+- **Theme**: KDE Breeze integration (auto-detects dark/light)
+
+### KDE Plasma Integration
+
+When running on KDE Plasma, DarkNote automatically:
+- Detects Breeze Dark/Light theme from `~/.config/kdeglobals`
+- Applies Breeze color palette to UI
+- Uses Qt-compatible color scheme
+- Registers desktop actions (New Snippet, Search)
+- Integrates with Application Launcher
+- Supports KDE startup notifications
 
 ### Project Structure
 ```

@@ -17,6 +17,7 @@ import androidx.compose.ui.window.*
 import com.darknote.core.model.Snippet
 import com.darknote.desktop.di.desktopModule
 import com.darknote.desktop.di.initKoin
+import com.darknote.desktop.platform.KDEIntegration
 import com.darknote.desktop.ui.screens.EditorScreen
 import com.darknote.desktop.ui.screens.SnippetListScreen
 import com.darknote.desktop.viewmodel.SnippetListViewModel
@@ -40,8 +41,17 @@ fun main() = application {
         ) {
             window.minimumSize = Dimension(800, 600)
             
+            // Use KDE Breeze theme if running in KDE, otherwise dark theme
+            val colorScheme = remember {
+                if (KDEIntegration.isKDE()) {
+                    KDEIntegration.getKDEColorScheme()
+                } else {
+                    darkColorScheme()
+                }
+            }
+            
             MaterialTheme(
-                colorScheme = darkColorScheme()
+                colorScheme = colorScheme
             ) {
                 App()
             }

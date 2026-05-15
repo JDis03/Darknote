@@ -56,6 +56,15 @@ compose.desktop {
                 iconFile.set(project.file("src/main/resources/icon.png"))
                 menuGroup = "Utility"
                 appCategory = "Utility"
+                
+                // KDE-specific settings
+                debMaintainer = "darknote@example.com"
+                debPackageVersion = "1.0.0"
+                rpmLicenseType = "GPL-3.0"
+                
+                // Desktop file metadata
+                appRelease = "1"
+                shortcut = true
             }
         }
         
