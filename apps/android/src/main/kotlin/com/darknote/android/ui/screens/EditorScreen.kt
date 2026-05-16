@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
@@ -295,6 +296,7 @@ fun EditorScreen(
                     keyboardActions = KeyboardActions(
                         onNext = { contentFocusRequester.requestFocus() }
                     ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     singleLine = true,
                     decorationBox = { innerTextField ->
                         if (titleField.text.isEmpty()) {
@@ -329,7 +331,8 @@ fun EditorScreen(
                         fontFamily = FontFamily.Monospace,
                         lineHeight = 22.sp,
                         color = MaterialTheme.colorScheme.onSurface
-                    )
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
                 )
 
                 Spacer(Modifier.height(80.dp))
