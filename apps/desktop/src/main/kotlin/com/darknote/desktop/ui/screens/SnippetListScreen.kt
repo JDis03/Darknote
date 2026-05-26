@@ -21,11 +21,14 @@ import com.darknote.core.model.Snippet
 import com.darknote.core.model.Folder
 import com.darknote.desktop.shortcut.KeyShortcut
 import com.darknote.desktop.shortcut.ShortcutRegistry
+import com.darknote.desktop.settings.ThemeMode
 import com.darknote.desktop.ui.components.CreateFolderDialog
 import com.darknote.desktop.ui.components.DeleteFolderDialog
 import com.darknote.desktop.ui.components.FolderSidebar
 import com.darknote.desktop.ui.components.RenameFolderDialog
+import com.darknote.desktop.ui.components.SettingsDialog
 import com.darknote.desktop.viewmodel.SnippetListViewModel
+import com.darknote.desktop.viewmodel.ThemeViewModel
 import org.koin.compose.koinInject
 import java.text.SimpleDateFormat
 import java.util.*
@@ -51,6 +54,10 @@ fun SnippetListScreen(
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var folderToRename by remember { mutableStateOf<Folder?>(null) }
     var folderToDelete by remember { mutableStateOf<Folder?>(null) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
+
+    val themeViewModel: ThemeViewModel = koinInject()
+    val currentThemeMode by themeViewModel.themeMode.collectAsState()
 
     // Register keyboard shortcuts
     DisposableEffect(Unit) {
@@ -101,7 +108,7 @@ fun SnippetListScreen(
                         Icon(Icons.Default.Sync, "Sync")
                     }
                     
-                    IconButton(onClick = { /* Settings */ }) {
+                    IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(Icons.Default.Settings, "Settings")
                     }
                 }
@@ -226,6 +233,16 @@ fun SnippetListScreen(
             onConfirm = {
                 viewModel.deleteFolder(folder.id)
             }
+        )
+    }
+
+    if (showSettingsDialog) {
+        SettingsDialog(
+            currentThemeMode = currentThemeMode,
+            onThemeModeChange = { mode ->
+                themeViewModel.setThemeMode(mode)
+            },
+            onDismiss = { showSettingsDialog = false }
         )
     }
 }

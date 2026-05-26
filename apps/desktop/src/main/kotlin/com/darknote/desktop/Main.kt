@@ -20,8 +20,10 @@ import com.darknote.desktop.di.initKoin
 import com.darknote.desktop.platform.KDEIntegration
 import com.darknote.desktop.ui.screens.AdvancedEditorScreen
 import com.darknote.desktop.shortcut.ShortcutRegistry
+import com.darknote.desktop.ui.screens.AdvancedEditorScreen
 import com.darknote.desktop.ui.screens.SnippetListScreen
 import com.darknote.desktop.viewmodel.SnippetListViewModel
+import com.darknote.desktop.viewmodel.ThemeViewModel
 import kotlinx.coroutines.launch
 import org.koin.compose.KoinApplication
 import org.koin.compose.koinInject
@@ -45,14 +47,8 @@ fun main() = application {
         ) {
             window.minimumSize = Dimension(800, 600)
             
-            // Use KDE Breeze theme if running in KDE, otherwise dark theme
-            val colorScheme = remember {
-                if (KDEIntegration.isKDE()) {
-                    KDEIntegration.getKDEColorScheme()
-                } else {
-                    darkColorScheme()
-                }
-            }
+            val themeViewModel: ThemeViewModel = koinInject()
+            val colorScheme by themeViewModel.colorScheme.collectAsState()
             
             MaterialTheme(
                 colorScheme = colorScheme

@@ -8,8 +8,10 @@ import com.darknote.core.repository.SyncMetadataRepository
 import com.darknote.core.storage.FileStorageService
 import com.darknote.desktop.platform.DesktopClipboardManager
 import com.darknote.desktop.platform.DesktopFileStorageFactory
+import com.darknote.desktop.settings.SettingsManager
 import com.darknote.desktop.shortcut.ShortcutRegistry
 import com.darknote.desktop.viewmodel.SnippetListViewModel
+import com.darknote.desktop.viewmodel.ThemeViewModel
 import com.darknote.persistence.DatabaseDriverFactory
 import com.darknote.persistence.database.DarkNoteDatabase
 import com.darknote.persistence.repository.DeletedSnippetRepositoryImpl
@@ -54,8 +56,12 @@ val desktopModule = module {
     // Shortcuts
     single { ShortcutRegistry() }
 
+    // Settings
+    single { SettingsManager() }
+
     // ViewModels
     singleOf(::SnippetListViewModel)
+    single { ThemeViewModel(get()) }
 }
 
 fun initKoin(): List<Module> {
