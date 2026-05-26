@@ -5,9 +5,14 @@ Modern snippet manager with Dropbox sync - Desktop edition built with Compose Mu
 ## Features
 
 - **Full CRUD operations** - Create, edit, delete snippets
-- **Dropbox Sync** - Automatic bidirectional synchronization
+- **Folder organization** - Collapsible sidebar with folder tree (Kate-style)
+- **Tag management** - Add/remove tags with chip UI
+- **Syntax highlighting** - Real-time highlighting in editable mode (12 languages)
+- **Keyboard shortcuts** - Ctrl+N (new), Ctrl+S (save), Ctrl+F (find), Ctrl+Shift+F (search)
+- **Dropbox Sync** - Automatic bidirectional synchronization with tombstone deletion
 - **Auto-save** - Changes saved automatically as you type
-- **Search & Filter** - Find snippets quickly
+- **Search & Filter** - Find snippets by title, content, tags, or language
+- **Theme settings** - Dark/Light/System with persistent JSON storage
 - **Material 3 Design** - Modern dark theme UI
 - **KDE Integration** - Breeze theme support, native look on KDE Plasma
 - **Cross-platform** - Linux, macOS, Windows support
@@ -61,10 +66,25 @@ sudo dpkg -i apps/desktop/build/compose/binaries/main/deb/*.deb
 ```
 
 **Universal (AppImage)**
+
+**Requirements**: JDK 17+ with `jpackage` tool (not included in Android Studio JBR)
+
 ```bash
-./gradlew :apps:desktop:packageAppImage
-chmod +x apps/desktop/build/compose/binaries/main/app-image/*.AppImage
-./apps/desktop/build/compose/binaries/main/app-image/*.AppImage
+# Build release AppImage
+./gradlew :apps:desktop:packageReleaseAppImage
+
+# Run the AppImage
+chmod +x apps/desktop/build/compose/binaries/main-release/app-image/*.AppImage
+./apps/desktop/build/compose/binaries/main-release/app-image/*.AppImage
+```
+
+**Note**: If you get "jpackage is missing", install a full JDK:
+```bash
+# Arch Linux
+sudo pacman -S jdk-openjdk
+
+# Ubuntu/Debian
+sudo apt install openjdk-17-jdk
 ```
 
 ### Development
@@ -121,7 +141,7 @@ apps/desktop/
 ### Linux
 - Database: `~/.local/share/DarkNote/darknote.db`
 - Snippets: `~/.local/share/DarkNote/snippets/`
-- Preferences: Java Preferences API
+- Settings: `~/.config/darknote/settings.json`
 
 ### macOS
 - Database: `~/Library/Application Support/DarkNote/darknote.db`
@@ -168,13 +188,17 @@ Snippets sync to `/darknote/` folder in your Dropbox.
 
 ## Roadmap
 
+- [x] Keyboard shortcuts (Ctrl+N, Ctrl+S, Ctrl+F, Ctrl+Shift+F)
+- [x] Syntax highlighting (12 languages)
+- [x] Folder organization with sidebar
+- [x] Tag management
+- [x] Theme settings (Dark/Light/System)
 - [ ] Menu bar (File, Edit, View, Help)
-- [ ] Keyboard shortcuts (Ctrl+N, Ctrl+S, Ctrl+F)
 - [ ] Multi-window support
 - [ ] System tray integration
 - [ ] Markdown preview
-- [ ] Syntax highlighting themes
 - [ ] Import/export (JSON, Markdown)
+- [ ] Code formatting (via external tools)
 
 ## License
 
