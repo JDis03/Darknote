@@ -1,6 +1,9 @@
 package com.darknote.desktop.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -41,6 +44,8 @@ fun AdvancedEditorScreen(
     var titleField by remember { mutableStateOf("") }
     var originalTitle by remember { mutableStateOf("") }
     var languageField by remember { mutableStateOf<String?>(null) }
+    var tagsField by remember { mutableStateOf<List<String>>(emptyList()) }
+    var newTagInput by remember { mutableStateOf("") }
     var isModified by remember { mutableStateOf(false) }
     var saveStatus by remember { mutableStateOf(EditorSaveStatus.Idle) }
     
@@ -57,6 +62,7 @@ fun AdvancedEditorScreen(
             titleField = loaded.title
             originalTitle = loaded.title
             languageField = loaded.language
+            tagsField = loaded.tags
         }
     }
 
@@ -105,7 +111,12 @@ fun AdvancedEditorScreen(
             shortcutRegistry.register(KeyShortcut(Key.S, ctrl = true)) {
                 snippet?.let { s ->
                     viewModel.updateSnippet(
-                        s.copy(title = titleField, content = contentField, language = languageField)
+                        s.copy(
+                            title = titleField,
+                            content = contentField,
+                            language = languageField,
+                            tags = tagsField
+                        )
                     )
                     saveStatus = EditorSaveStatus.Saved
                     originalContent = contentField
@@ -256,6 +267,78 @@ fun AdvancedEditorScreen(
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                 )
             )
+
+            // Tags section
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Tags:",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+
+                LazyRow(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(tagsField) { tag ->
+                        InputChip(
+                            selected = false,
+                            onClick = { },
+                            label = { Text(tag) },
+                            trailingIcon = {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Remove",
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clickable {
+                                            tagsField = tagsField - tag
+                                            snippet?.let { s ->
+                                                viewModel.updateSnippet(s.copy(tags = tagsField))
+                                            }
+                                        }
+                                )
+                            }
+                        )
+                    }
+
+                    // Add tag input
+                    item {
+                        OutlinedTextField(
+                            value = newTagInput,
+                            onValueChange = { newTagInput = it },
+                            placeholder = { Text("Add tag...") },
+                            singleLine = true,
+                            modifier = Modifier.width(120.dp),
+                            textStyle = MaterialTheme.typography.bodySmall,
+                            trailingIcon = {
+                                if (newTagInput.isNotBlank()) {
+                                    IconButton(
+                                        onClick = {
+                                            val tag = newTagInput.trim()
+                                            if (tag.isNotEmpty() && tag !in tagsField) {
+                                                tagsField = tagsField + tag
+                                                newTagInput = ""
+                                                snippet?.let { s ->
+                                                    viewModel.updateSnippet(s.copy(tags = tagsField))
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(Icons.Default.Add, "Add tag", modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+            }
             
             // Editor toolbar
             EditorToolbar(

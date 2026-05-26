@@ -146,6 +146,54 @@ class SnippetListViewModel(
         _selectedTag.value = tag
     }
 
+    fun createFolder(name: String, parentId: String? = null, callback: (String) -> Unit = {}) {
+        scope.launch {
+            val folderId = UUID.randomUUID().toString()
+            val folder = Folder(
+                id = folderId,
+                name = name,
+                parentId = parentId,
+                sortOrder = 0,
+                createdAt = System.currentTimeMillis()
+            )
+            val result = folderRepository.create(folder)
+            if (result.isSuccess) {
+                showSnackbar(SnackbarData("Folder created"))
+                callback(folderId)
+            } else {
+                showSnackbar(SnackbarData("Failed to create folder"))
+            }
+        }
+    }
+
+    fun renameFolder(folderId: String, newName: String) {
+        scope.launch {
+            folderRepository.getById(folderId)?.let { folder ->
+                val updated = folder.copy(name = newName)
+                val result = folderRepository.update(updated)
+                if (result.isSuccess) {
+                    showSnackbar(SnackbarData("Folder renamed"))
+                } else {
+                    showSnackbar(SnackbarData("Failed to rename folder"))
+                }
+            }
+        }
+    }
+
+    fun deleteFolder(folderId: String) {
+        scope.launch {
+            val result = folderRepository.delete(folderId, moveChildrenToParent = true)
+            if (result.isSuccess) {
+                showSnackbar(SnackbarData("Folder deleted"))
+                if (_selectedFolderId.value == folderId) {
+                    _selectedFolderId.value = null
+                }
+            } else {
+                showSnackbar(SnackbarData("Failed to delete folder"))
+            }
+        }
+    }
+
     fun createSnippet(title: String = "", content: String = "", folderId: String? = null, callback: (String) -> Unit = {}) {
         scope.launch {
             _createState.value = CreateSnippetState.Creating

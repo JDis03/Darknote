@@ -18,8 +18,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.darknote.core.model.Snippet
+import com.darknote.core.model.Folder
 import com.darknote.desktop.shortcut.KeyShortcut
 import com.darknote.desktop.shortcut.ShortcutRegistry
+import com.darknote.desktop.ui.components.CreateFolderDialog
+import com.darknote.desktop.ui.components.DeleteFolderDialog
+import com.darknote.desktop.ui.components.FolderSidebar
+import com.darknote.desktop.ui.components.RenameFolderDialog
 import com.darknote.desktop.viewmodel.SnippetListViewModel
 import org.koin.compose.koinInject
 import java.text.SimpleDateFormat
@@ -36,9 +41,16 @@ fun SnippetListScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
     val snackbarData by viewModel.snackbarData.collectAsState()
+    val folders by viewModel.folders.collectAsState()
+    val selectedFolderId by viewModel.selectedFolderId.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val searchFocusRequester = remember { FocusRequester() }
     val shortcutRegistry: ShortcutRegistry = koinInject()
+
+    // Dialog states
+    var showCreateFolderDialog by remember { mutableStateOf(false) }
+    var folderToRename by remember { mutableStateOf<Folder?>(null) }
+    var folderToDelete by remember { mutableStateOf<Folder?>(null) }
 
     // Register keyboard shortcuts
     DisposableEffect(Unit) {
@@ -108,11 +120,23 @@ fun SnippetListScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            // Folder sidebar
+            FolderSidebar(
+                folders = folders,
+                selectedFolderId = selectedFolderId,
+                onFolderSelect = { viewModel.selectFolder(it) },
+                onCreateFolder = { showCreateFolderDialog = true },
+                onRenameFolder = { folderToRename = it },
+                onDeleteFolder = { folderToDelete = it }
+            )
+
+            // Main content
+            Column(modifier = Modifier.weight(1f)) {
             // Search bar
             OutlinedTextField(
                 value = searchQuery,
@@ -171,7 +195,38 @@ fun SnippetListScreen(
                     }
                 }
             }
+            }
         }
+    }
+
+    // Folder dialogs
+    if (showCreateFolderDialog) {
+        CreateFolderDialog(
+            onDismiss = { showCreateFolderDialog = false },
+            onConfirm = { name ->
+                viewModel.createFolder(name)
+            }
+        )
+    }
+
+    folderToRename?.let { folder ->
+        RenameFolderDialog(
+            currentName = folder.name,
+            onDismiss = { folderToRename = null },
+            onConfirm = { newName ->
+                viewModel.renameFolder(folder.id, newName)
+            }
+        )
+    }
+
+    folderToDelete?.let { folder ->
+        DeleteFolderDialog(
+            folderName = folder.name,
+            onDismiss = { folderToDelete = null },
+            onConfirm = {
+                viewModel.deleteFolder(folder.id)
+            }
+        )
     }
 }
 
