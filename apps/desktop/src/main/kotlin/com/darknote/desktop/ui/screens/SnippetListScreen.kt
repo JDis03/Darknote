@@ -11,11 +11,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.darknote.core.model.Snippet
+import com.darknote.desktop.shortcut.KeyShortcut
+import com.darknote.desktop.shortcut.ShortcutRegistry
 import com.darknote.desktop.viewmodel.SnippetListViewModel
+import org.koin.compose.koinInject
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -31,6 +37,23 @@ fun SnippetListScreen(
     val syncState by viewModel.syncState.collectAsState()
     val snackbarData by viewModel.snackbarData.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val searchFocusRequester = remember { FocusRequester() }
+    val shortcutRegistry: ShortcutRegistry = koinInject()
+
+    // Register keyboard shortcuts
+    DisposableEffect(Unit) {
+        val unregisters = listOf(
+            shortcutRegistry.register(KeyShortcut(Key.N, ctrl = true)) {
+                viewModel.createSnippet { snippetId -> onCreateSnippet(snippetId) }
+                true
+            },
+            shortcutRegistry.register(KeyShortcut(Key.F, ctrl = true, shift = true)) {
+                searchFocusRequester.requestFocus()
+                true
+            }
+        )
+        onDispose { unregisters.forEach { it() } }
+    }
     
     LaunchedEffect(snackbarData) {
         snackbarData?.let {
@@ -96,7 +119,8 @@ fun SnippetListScreen(
                 onValueChange = { viewModel.onSearchQueryChange(it) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .focusRequester(searchFocusRequester),
                 placeholder = { Text("Search snippets...") },
                 leadingIcon = { Icon(Icons.Default.Search, null) },
                 trailingIcon = {

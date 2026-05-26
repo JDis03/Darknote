@@ -8,6 +8,7 @@ import com.darknote.core.repository.SyncMetadataRepository
 import com.darknote.core.storage.FileStorageService
 import com.darknote.desktop.platform.DesktopClipboardManager
 import com.darknote.desktop.platform.DesktopFileStorageFactory
+import com.darknote.desktop.shortcut.ShortcutRegistry
 import com.darknote.desktop.viewmodel.SnippetListViewModel
 import com.darknote.persistence.DatabaseDriverFactory
 import com.darknote.persistence.database.DarkNoteDatabase
@@ -50,6 +51,9 @@ val desktopModule = module {
         )
     }
     
+    // Shortcuts
+    single { ShortcutRegistry() }
+
     // ViewModels
     singleOf(::SnippetListViewModel)
 }

@@ -15,6 +15,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.darknote.desktop.editor.highlighter.SyntaxHighlightTransformation
 import com.darknote.desktop.editor.highlighter.SyntaxHighlighterFactory
 import com.darknote.desktop.editor.theme.EditorColorScheme
 
@@ -122,7 +123,8 @@ fun CodeEditor(
                         lineHeight = 22.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    visualTransformation = SyntaxHighlightTransformation(language, colorScheme)
                 )
             }
         }

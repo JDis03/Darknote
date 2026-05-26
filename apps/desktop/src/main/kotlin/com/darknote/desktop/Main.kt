@@ -19,6 +19,7 @@ import com.darknote.desktop.di.desktopModule
 import com.darknote.desktop.di.initKoin
 import com.darknote.desktop.platform.KDEIntegration
 import com.darknote.desktop.ui.screens.AdvancedEditorScreen
+import com.darknote.desktop.shortcut.ShortcutRegistry
 import com.darknote.desktop.ui.screens.SnippetListScreen
 import com.darknote.desktop.viewmodel.SnippetListViewModel
 import kotlinx.coroutines.launch
@@ -31,13 +32,16 @@ fun main() = application {
     KoinApplication(application = {
         modules(initKoin())
     }) {
+        val shortcutRegistry: ShortcutRegistry = koinInject()
+
         Window(
             onCloseRequest = ::exitApplication,
             title = "DarkNote",
             state = rememberWindowState(
                 width = 1200.dp,
                 height = 800.dp
-            )
+            ),
+            onPreviewKeyEvent = { shortcutRegistry.handleEvent(it) }
         ) {
             window.minimumSize = Dimension(800, 600)
             

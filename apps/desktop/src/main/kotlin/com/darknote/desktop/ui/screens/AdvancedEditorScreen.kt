@@ -8,15 +8,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.darknote.desktop.shortcut.KeyShortcut
+import com.darknote.desktop.shortcut.ShortcutRegistry
 import com.darknote.desktop.ui.components.CodeEditor
 import com.darknote.desktop.ui.components.EditorToolbar
 import com.darknote.desktop.ui.components.FindReplaceDialog
 import com.darknote.desktop.viewmodel.SnippetListViewModel
 import kotlinx.coroutines.delay
+import org.koin.compose.koinInject
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -92,6 +96,30 @@ fun AdvancedEditorScreen(
                 if (saveStatus == EditorSaveStatus.Saved) saveStatus = EditorSaveStatus.Idle
             }
         }
+    }
+
+    // Register keyboard shortcuts
+    val shortcutRegistry: ShortcutRegistry = koinInject()
+    DisposableEffect(snippetId) {
+        val unregisters = listOf(
+            shortcutRegistry.register(KeyShortcut(Key.S, ctrl = true)) {
+                snippet?.let { s ->
+                    viewModel.updateSnippet(
+                        s.copy(title = titleField, content = contentField, language = languageField)
+                    )
+                    saveStatus = EditorSaveStatus.Saved
+                    originalContent = contentField
+                    originalTitle = titleField
+                    isModified = false
+                }
+                true
+            },
+            shortcutRegistry.register(KeyShortcut(Key.F, ctrl = true)) {
+                showFindDialog = true
+                true
+            }
+        )
+        onDispose { unregisters.forEach { it() } }
     }
 
     if (snippet == null) {
