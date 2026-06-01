@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -254,6 +255,7 @@ fun CreateSnippetSheet(
     folders: List<Folder>,
     onDismiss: () -> Unit,
     onCreate: (title: String, content: String, language: String?, tags: List<String>, folderId: String?) -> Unit,
+    onCreateFolder: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var title by remember { mutableStateOf("") }
@@ -261,6 +263,7 @@ fun CreateSnippetSheet(
     var language by remember { mutableStateOf("") }
     var tags by remember { mutableStateOf("") }
     var selectedFolderId by remember { mutableStateOf<String?>(null) }
+    var showCreateFolderDialog by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scrollState = rememberScrollState()
 
@@ -295,21 +298,36 @@ fun CreateSnippetSheet(
                 shape = MaterialTheme.shapes.medium
             )
 
-            if (folders.isNotEmpty()) {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(folders) { folder ->
-                        val isSelected = selectedFolderId == folder.id
-                        androidx.compose.material3.FilterChip(
-                            selected = isSelected,
-                            onClick = { selectedFolderId = if (isSelected) null else folder.id },
-                            label = { Text(folder.name, style = MaterialTheme.typography.labelMedium) },
-                            leadingIcon = if (isSelected) {
-                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                            } else null
-                        )
-                    }
+            // Folder selection with "New Folder" option
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(folders) { folder ->
+                    val isSelected = selectedFolderId == folder.id
+                    androidx.compose.material3.FilterChip(
+                        selected = isSelected,
+                        onClick = { selectedFolderId = if (isSelected) null else folder.id },
+                        label = { Text(folder.name, style = MaterialTheme.typography.labelMedium) },
+                        leadingIcon = if (isSelected) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        } else null
+                    )
+                }
+                
+                // "New Folder" chip
+                item {
+                    androidx.compose.material3.FilterChip(
+                        selected = false,
+                        onClick = { showCreateFolderDialog = true },
+                        label = { Text("+ New Folder", style = MaterialTheme.typography.labelMedium) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.CreateNewFolder,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    )
                 }
             }
 
@@ -382,6 +400,18 @@ fun CreateSnippetSheet(
                     Text("Create")
                 }
             }
+        }
+        
+        // Create folder dialog
+        if (showCreateFolderDialog) {
+            CreateFolderDialog(
+                parentFolders = folders,
+                onCreate = { folderName, parentId ->
+                    onCreateFolder(folderName)
+                    showCreateFolderDialog = false
+                },
+                onDismiss = { showCreateFolderDialog = false }
+            )
         }
     }
 }

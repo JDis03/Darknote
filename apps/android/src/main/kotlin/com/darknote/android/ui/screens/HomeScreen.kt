@@ -55,9 +55,10 @@ import androidx.compose.ui.unit.dp
 import com.darknote.android.CreateSnippetState
 import com.darknote.android.SnackbarData
 import com.darknote.android.SnippetListViewModel
+import com.darknote.android.ui.components.CreateFolderDialog
 import com.darknote.android.ui.components.CreateSnippetSheet
 import com.darknote.android.ui.components.EmptyStateView
-import com.darknote.android.ui.components.CreateSnippetFab
+import com.darknote.android.ui.components.ExpandableCreateFab
 import com.darknote.android.ui.components.FilterBar
 import com.darknote.android.ui.components.SearchBar
 import com.darknote.android.ui.components.SnippetCard
@@ -96,6 +97,7 @@ fun HomeScreen(
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
     var showCreateSheet by remember { mutableStateOf(false) }
+    var showCreateFolderDialog by remember { mutableStateOf(false) }
     val editSnippet by remember { mutableStateOf<Snippet?>(null) }
     val scope = rememberCoroutineScope()
     var contextMenuSnippet by remember { mutableStateOf<Snippet?>(null) }
@@ -194,8 +196,9 @@ fun HomeScreen(
             }
         },
         floatingActionButton = {
-            CreateSnippetFab(
-                onClick = { showCreateSheet = true }
+            ExpandableCreateFab(
+                onCreateSnippet = { showCreateSheet = true },
+                onCreateFolder = { showCreateFolderDialog = true }
             )
         }
     ) { padding ->
@@ -324,7 +327,21 @@ fun HomeScreen(
             },
             onCreate = { title, content, language, tags, folderId ->
                 viewModel.createSnippet(title, content, language, tags, folderId)
+            },
+            onCreateFolder = { folderName ->
+                viewModel.createFolder(folderName, parentId = null)
             }
+        )
+    }
+
+    if (showCreateFolderDialog) {
+        CreateFolderDialog(
+            parentFolders = folders,
+            onCreate = { name, parentId ->
+                viewModel.createFolder(name, parentId)
+                showCreateFolderDialog = false
+            },
+            onDismiss = { showCreateFolderDialog = false }
         )
     }
 }
