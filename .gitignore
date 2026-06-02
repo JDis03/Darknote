@@ -9,3 +9,6 @@ joplin/
 # Gradle wrapper
 gradle-8.8/
 gradle-8.8-bin.zip
+
+# Internal docs
+docs/JOPLIN_LEARNINGS.md
