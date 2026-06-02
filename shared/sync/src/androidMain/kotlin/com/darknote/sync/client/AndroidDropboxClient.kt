@@ -2,6 +2,8 @@ package com.darknote.sync.client
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.dropbox.core.DbxAppInfo
 import com.dropbox.core.DbxAuthFinish
 import com.dropbox.core.DbxPKCEWebAuth
@@ -20,6 +22,8 @@ import java.io.FileOutputStream
 /**
  * Android implementation of DropboxClient using PKCE auth via DbxPKCEWebAuth.
  * Same approach as JvmDropboxClient — no secret required.
+ * 
+ * SECURITY: Uses EncryptedSharedPreferences to store auth tokens securely.
  */
 class AndroidDropboxClient(
     private val context: Context,
@@ -31,17 +35,53 @@ class AndroidDropboxClient(
         .withHttpRequestor(OkHttp3Requestor(OkHttp3Requestor.defaultOkHttpClient()))
         .build()
 
-    private val prefs: SharedPreferences =
-        context.getSharedPreferences("dropbox_auth", Context.MODE_PRIVATE)
+    // ENCRYPTED SharedPreferences for secure token storage
+    private val prefs: SharedPreferences by lazy {
+        try {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            
+            EncryptedSharedPreferences.create(
+                context,
+                "dropbox_auth_secure",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: Exception) {
+            // Fallback to regular SharedPreferences if encryption fails (rare)
+            // In production, you might want to log this or handle differently
+            context.getSharedPreferences("dropbox_auth_fallback", Context.MODE_PRIVATE)
+        }
+    }
 
     private var client: DbxClientV2? = null
+    private var currentCredential: DbxCredential? = null
     private var pkceWebAuth: DbxPKCEWebAuth? = null
 
     init {
         loadClient()
     }
 
-    override fun isAuthorized(): Boolean = client != null
+    override fun isAuthorized(): Boolean {
+        // Reload client from saved credentials if not already loaded
+        if (client == null) {
+            loadClient()
+        }
+        
+        // Check if token is expired
+        val credential = currentCredential ?: return false
+        val expiresAt = credential.expiresAt
+        
+        // If no expiration or refresh token exists, consider authorized
+        if (expiresAt == null || credential.refreshToken != null) {
+            return client != null
+        }
+        
+        // If token expired and no refresh token, not authorized
+        return expiresAt > System.currentTimeMillis()
+    }
 
     override fun getAuthUrl(): String {
         val appInfo = DbxAppInfo(appKey)
@@ -73,7 +113,7 @@ class AndroidDropboxClient(
     }
 
     override suspend fun listFiles(path: String): Result<List<RemoteFile>> {
-        val dbxClient = client ?: return Result.failure(IllegalStateException("Not authenticated"))
+        val dbxClient = ensureClient() ?: return Result.failure(IllegalStateException("Not authenticated"))
 
         return try {
             withContext(Dispatchers.IO) {
@@ -113,7 +153,7 @@ class AndroidDropboxClient(
     }
 
     override suspend fun uploadFile(localPath: String, remotePath: String): Result<String> {
-        val dbxClient = client ?: return Result.failure(IllegalStateException("Not authenticated"))
+        val dbxClient = ensureClient() ?: return Result.failure(IllegalStateException("Not authenticated"))
 
         return try {
             withContext(Dispatchers.IO) {
@@ -130,7 +170,7 @@ class AndroidDropboxClient(
     }
 
     override suspend fun downloadFile(remotePath: String, localPath: String): Result<Unit> {
-        val dbxClient = client ?: return Result.failure(IllegalStateException("Not authenticated"))
+        val dbxClient = ensureClient() ?: return Result.failure(IllegalStateException("Not authenticated"))
 
         return try {
             withContext(Dispatchers.IO) {
@@ -146,7 +186,7 @@ class AndroidDropboxClient(
     }
 
     override suspend fun deleteFile(remotePath: String): Result<Unit> {
-        val dbxClient = client ?: return Result.failure(IllegalStateException("Not authenticated"))
+        val dbxClient = ensureClient() ?: return Result.failure(IllegalStateException("Not authenticated"))
 
         return try {
             withContext(Dispatchers.IO) {
@@ -159,7 +199,7 @@ class AndroidDropboxClient(
     }
 
     override suspend fun getMetadata(remotePath: String): Result<RemoteMetadata> {
-        val dbxClient = client ?: return Result.failure(IllegalStateException("Not authenticated"))
+        val dbxClient = ensureClient() ?: return Result.failure(IllegalStateException("Not authenticated"))
 
         return try {
             withContext(Dispatchers.IO) {
@@ -187,6 +227,7 @@ class AndroidDropboxClient(
     }
 
     private fun saveCredentials(credential: DbxCredential) {
+        currentCredential = credential
         prefs.edit()
             .putString("access_token", credential.accessToken)
             .putString("refresh_token", credential.refreshToken)
@@ -201,15 +242,48 @@ class AndroidDropboxClient(
 
         try {
             val credential = DbxCredential(accessToken, expiresAt, refreshToken, appKey)
+            currentCredential = credential
             client = DbxClientV2(config, credential)
         } catch (e: Exception) {
             prefs.edit().clear().apply()
+            currentCredential = null
         }
+    }
+
+    private suspend fun ensureClient(): DbxClientV2? {
+        if (client == null) return null
+
+        val credential = currentCredential ?: return null
+        val expiresAt = credential.expiresAt ?: return client
+
+        // If token expires within 60 seconds, refresh it
+        if (expiresAt < System.currentTimeMillis() + 60_000L) {
+            return try {
+                withContext(Dispatchers.IO) {
+                    val refreshed = client!!.refreshAccessToken()
+                    saveCredentials(DbxCredential(
+                        refreshed.accessToken,
+                        refreshed.expiresAt,
+                        credential.refreshToken,
+                        appKey
+                    ))
+                    client = DbxClientV2(config, currentCredential!!)
+                    client
+                }
+            } catch (e: Exception) {
+                // Refresh failed - clear auth and return null to trigger re-auth
+                logout()
+                null
+            }
+        }
+
+        return client
     }
 
     fun logout() {
         prefs.edit().clear().apply()
         client = null
+        currentCredential = null
     }
 }
 

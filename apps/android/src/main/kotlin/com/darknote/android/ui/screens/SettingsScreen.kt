@@ -17,34 +17,77 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ClipboardManager
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.darknote.android.SnippetListViewModel
 import com.darknote.android.viewmodel.AuthState
 import com.darknote.android.viewmodel.AuthViewModel
 import com.darknote.android.viewmodel.LogType
+import com.darknote.sync.engine.SyncLogType as EngineLogType
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.Date
+
+private data class UnifiedLog(
+    val timestamp: Long,
+    val message: String,
+    val type: EngineLogType,
+    val source: String
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     authViewModel: AuthViewModel,
+    snippetViewModel: SnippetListViewModel,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val authState by authViewModel.authState
-    val authUrl by authViewModel.authUrl
-    val syncLogs by authViewModel.syncLogs
+    val clipboardManager = LocalClipboardManager.current
+    val authState by authViewModel.authState.collectAsState()
+    val authUrl by authViewModel.authUrl.collectAsState()
+    val authLogs by authViewModel.syncLogs.collectAsState()
+    val syncLogs by snippetViewModel.syncLogs.collectAsState()
     val listState = rememberLazyListState()
+
+    val unifiedLogs = remember(authLogs, syncLogs) {
+        (authLogs.map { log ->
+            val engineType = when (log.type) {
+                LogType.INFO -> EngineLogType.INFO
+                LogType.SUCCESS -> EngineLogType.SUCCESS
+                LogType.ERROR -> EngineLogType.ERROR
+                LogType.WARNING -> EngineLogType.WARNING
+            }
+            UnifiedLog(
+                timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).parse(log.timestamp)?.time
+                    ?: System.currentTimeMillis(),
+                message = log.message,
+                type = engineType,
+                source = "AUTH"
+            )
+        } + syncLogs.map { log ->
+            UnifiedLog(
+                timestamp = log.timestamp,
+                message = log.message,
+                type = log.type,
+                source = "SYNC"
+            )
+        }).sortedBy { it.timestamp }
+    }
     
     // State for manual code entry (Joplin style)
     var authCode by remember { mutableStateOf("") }
 
     // Auto-scroll to bottom when new logs are added
-    LaunchedEffect(syncLogs.size) {
-        if (syncLogs.isNotEmpty()) {
-            listState.animateScrollToItem(syncLogs.size - 1)
+    LaunchedEffect(unifiedLogs.size) {
+        if (unifiedLogs.isNotEmpty()) {
+            listState.animateScrollToItem(unifiedLogs.size - 1)
         }
     }
 
@@ -280,11 +323,26 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium
                         )
-                        
-                        TextButton(
-                            onClick = { authViewModel.clearLogs() }
-                        ) {
-                            Text("Clear")
+
+                        Row {
+                            TextButton(
+                                onClick = {
+                                    val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                                    val text = unifiedLogs.joinToString("\n") { log ->
+                                        "${sdf.format(Date(log.timestamp))} ${log.source}:${log.type.name} ${log.message}"
+                                    }
+                                    clipboardManager.setText(AnnotatedString(text))
+                                },
+                                enabled = unifiedLogs.isNotEmpty()
+                            ) {
+                                Text("Copy")
+                            }
+
+                            TextButton(
+                                onClick = { authViewModel.clearLogs() }
+                            ) {
+                                Text("Clear")
+                            }
                         }
                     }
 
@@ -296,11 +354,11 @@ fun SettingsScreen(
                             .weight(1f),
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        items(syncLogs) { log ->
+                        items(unifiedLogs) { log ->
                             SyncLogItem(log = log)
                         }
                         
-                        if (syncLogs.isEmpty()) {
+                        if (unifiedLogs.isEmpty()) {
                             item {
                                 Box(
                                     modifier = Modifier
@@ -325,15 +383,17 @@ fun SettingsScreen(
 
 @Composable
 private fun SyncLogItem(
-    log: com.darknote.android.viewmodel.SyncLog,
+    log: UnifiedLog,
     modifier: Modifier = Modifier
 ) {
     val logColor = when (log.type) {
-        LogType.SUCCESS -> Color(0xFF4CAF50)
-        LogType.ERROR -> Color(0xFFF44336)
-        LogType.WARNING -> Color(0xFFFF9800)
-        LogType.INFO -> MaterialTheme.colorScheme.onSurfaceVariant
+        EngineLogType.SUCCESS -> Color(0xFF4CAF50)
+        EngineLogType.ERROR -> Color(0xFFF44336)
+        EngineLogType.WARNING -> Color(0xFFFF9800)
+        EngineLogType.INFO -> MaterialTheme.colorScheme.onSurfaceVariant
     }
+
+    val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(log.timestamp))
 
     Row(
         modifier = modifier
@@ -342,7 +402,7 @@ private fun SyncLogItem(
         verticalAlignment = Alignment.Top
     ) {
         Text(
-            text = log.timestamp,
+            text = timeStr,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontFamily = FontFamily.Monospace,
@@ -350,7 +410,7 @@ private fun SyncLogItem(
         )
         
         Text(
-            text = log.type.name,
+            text = "${log.source}:${log.type.name}",
             style = MaterialTheme.typography.bodySmall,
             color = logColor,
             fontWeight = FontWeight.Bold,

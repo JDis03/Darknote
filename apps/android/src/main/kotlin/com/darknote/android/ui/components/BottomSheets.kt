@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -53,6 +54,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.darknote.core.model.Folder
@@ -252,6 +255,7 @@ fun CreateSnippetSheet(
     folders: List<Folder>,
     onDismiss: () -> Unit,
     onCreate: (title: String, content: String, language: String?, tags: List<String>, folderId: String?) -> Unit,
+    onCreateFolder: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var title by remember { mutableStateOf("") }
@@ -259,6 +263,7 @@ fun CreateSnippetSheet(
     var language by remember { mutableStateOf("") }
     var tags by remember { mutableStateOf("") }
     var selectedFolderId by remember { mutableStateOf<String?>(null) }
+    var showCreateFolderDialog by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scrollState = rememberScrollState()
 
@@ -293,21 +298,36 @@ fun CreateSnippetSheet(
                 shape = MaterialTheme.shapes.medium
             )
 
-            if (folders.isNotEmpty()) {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(folders) { folder ->
-                        val isSelected = selectedFolderId == folder.id
-                        androidx.compose.material3.FilterChip(
-                            selected = isSelected,
-                            onClick = { selectedFolderId = if (isSelected) null else folder.id },
-                            label = { Text(folder.name, style = MaterialTheme.typography.labelMedium) },
-                            leadingIcon = if (isSelected) {
-                                { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                            } else null
-                        )
-                    }
+            // Folder selection with "New Folder" option
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(folders) { folder ->
+                    val isSelected = selectedFolderId == folder.id
+                    androidx.compose.material3.FilterChip(
+                        selected = isSelected,
+                        onClick = { selectedFolderId = if (isSelected) null else folder.id },
+                        label = { Text(folder.name, style = MaterialTheme.typography.labelMedium) },
+                        leadingIcon = if (isSelected) {
+                            { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        } else null
+                    )
+                }
+                
+                // "New Folder" chip
+                item {
+                    androidx.compose.material3.FilterChip(
+                        selected = false,
+                        onClick = { showCreateFolderDialog = true },
+                        label = { Text("+ New Folder", style = MaterialTheme.typography.labelMedium) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.CreateNewFolder,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    )
                 }
             }
 
@@ -381,6 +401,18 @@ fun CreateSnippetSheet(
                 }
             }
         }
+        
+        // Create folder dialog
+        if (showCreateFolderDialog) {
+            CreateFolderDialog(
+                parentFolders = folders,
+                onCreate = { folderName, parentId ->
+                    onCreateFolder(folderName)
+                    showCreateFolderDialog = false
+                },
+                onDismiss = { showCreateFolderDialog = false }
+            )
+        }
     }
 }
 
@@ -392,7 +424,12 @@ fun EditSnippetSheet(
     onSave: (Snippet) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var title by remember { mutableStateOf(snippet.title) }
+    var title by remember {
+        mutableStateOf(TextFieldValue(
+            text = snippet.title,
+            selection = TextRange(snippet.title.length) // cursor at end, not start
+        ))
+    }
     var content by remember { mutableStateOf(snippet.content) }
     var language by remember { mutableStateOf(snippet.language ?: "") }
     var tags by remember { mutableStateOf(snippet.tags.joinToString(", ")) }
@@ -427,7 +464,7 @@ fun EditSnippetSheet(
                 label = { Text("Title") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium
+                shape = MaterialTheme.shapes.medium,
             )
 
             if (folders.isNotEmpty()) {
@@ -494,13 +531,13 @@ fun EditSnippetSheet(
 
                 FilledTonalButton(
                     onClick = {
-                        if (title.isNotBlank()) {
+                        if (title.text.isNotBlank()) {
                             val tagList = tags.split(",")
                                 .map { it.trim() }
                                 .filter { it.isNotBlank() }
                             onSave(
                                 snippet.copy(
-                                    title = title,
+                                    title = title.text,
                                     content = content,
                                     language = language.ifBlank { null },
                                     tags = tagList,
@@ -511,7 +548,7 @@ fun EditSnippetSheet(
                         }
                     },
                     modifier = Modifier.weight(1f),
-                    enabled = title.isNotBlank()
+                    enabled = title.text.isNotBlank()
                 ) {
                     Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))

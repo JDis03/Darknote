@@ -16,7 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material.ExperimentalMaterialApi
@@ -52,15 +55,20 @@ import androidx.compose.ui.unit.dp
 import com.darknote.android.CreateSnippetState
 import com.darknote.android.SnackbarData
 import com.darknote.android.SnippetListViewModel
+import com.darknote.android.ui.components.CreateFolderDialog
 import com.darknote.android.ui.components.CreateSnippetSheet
 import com.darknote.android.ui.components.EmptyStateView
-import com.darknote.android.ui.components.CreateSnippetFab
+import com.darknote.android.ui.components.ExpandableCreateFab
 import com.darknote.android.ui.components.FilterBar
 import com.darknote.android.ui.components.SearchBar
 import com.darknote.android.ui.components.SnippetCard
 import com.darknote.android.ui.components.SnippetContextMenu
 import com.darknote.android.ui.components.SwipeToDismissBox
 import com.darknote.core.model.Snippet
+import com.darknote.sync.engine.SyncState
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,17 +84,20 @@ fun HomeScreen(
     val showFavoritesOnly by viewModel.showFavoritesOnly.collectAsState()
     val sortOrder by viewModel.sortOrder.collectAsState()
     val selectedFolderId by viewModel.selectedFolderId.collectAsState()
+    val selectedTag by viewModel.selectedTag.collectAsState()
     val folders by viewModel.folders.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val snackbarData by viewModel.snackbarData.collectAsState()
     val recentSearches by viewModel.recentSearches.collectAsState()
     val createState by viewModel.createState.collectAsState()
+    val syncState by viewModel.syncState.collectAsState()
 
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
     var showCreateSheet by remember { mutableStateOf(false) }
+    var showCreateFolderDialog by remember { mutableStateOf(false) }
     val editSnippet by remember { mutableStateOf<Snippet?>(null) }
     val scope = rememberCoroutineScope()
     var contextMenuSnippet by remember { mutableStateOf<Snippet?>(null) }
@@ -129,6 +140,37 @@ fun HomeScreen(
                     )
                 },
                 actions = {
+                    // Sync status indicator
+                    when (syncState) {
+                        is SyncState.Syncing -> {
+                            Icon(
+                                Icons.Default.Sync,
+                                contentDescription = "Syncing",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        is SyncState.Synced -> {
+                            Icon(
+                                Icons.Default.CloudDone,
+                                contentDescription = "Synced",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        is SyncState.Error -> {
+                            Icon(
+                                Icons.Default.CloudOff,
+                                contentDescription = "Sync error",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        is SyncState.Idle -> { /* No icon */ }
+                    }
+                    
+                    Spacer(Modifier.width(8.dp))
+                    
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(
                             Icons.Default.Settings,
@@ -154,8 +196,9 @@ fun HomeScreen(
             }
         },
         floatingActionButton = {
-            CreateSnippetFab(
-                onClick = { showCreateSheet = true }
+            ExpandableCreateFab(
+                onCreateSnippet = { showCreateSheet = true },
+                onCreateFolder = { showCreateFolderDialog = true }
             )
         }
     ) { padding ->
@@ -179,11 +222,13 @@ fun HomeScreen(
                 FilterBar(
                     folders = folders,
                     selectedFolderId = selectedFolderId,
+                    selectedTag = selectedTag,
                     showFavoritesOnly = showFavoritesOnly,
                     sortOrder = sortOrder,
                     onFolderSelect = viewModel::selectFolder,
                     onFavoritesToggle = viewModel::toggleShowFavorites,
-                    onSortOrderChange = viewModel::setSortOrder
+                    onSortOrderChange = viewModel::setSortOrder,
+                    onTagClear = { viewModel.selectTag(null) }
                 )
 
                 if (snippets.isEmpty()) {
@@ -244,6 +289,10 @@ fun HomeScreen(
                         showContextMenu = false
                         onNavigateToEditor(snippet.id)
                     },
+                    onRename = {
+                        showContextMenu = false
+                        // TODO: add rename dialog
+                    },
                     onCopy = {
                         showContextMenu = false
                         viewModel.copySnippet(snippet)
@@ -278,7 +327,21 @@ fun HomeScreen(
             },
             onCreate = { title, content, language, tags, folderId ->
                 viewModel.createSnippet(title, content, language, tags, folderId)
+            },
+            onCreateFolder = { folderName ->
+                viewModel.createFolder(folderName, parentId = null)
             }
+        )
+    }
+
+    if (showCreateFolderDialog) {
+        CreateFolderDialog(
+            parentFolders = folders,
+            onCreate = { name, parentId ->
+                viewModel.createFolder(name, parentId)
+                showCreateFolderDialog = false
+            },
+            onDismiss = { showCreateFolderDialog = false }
         )
     }
 }

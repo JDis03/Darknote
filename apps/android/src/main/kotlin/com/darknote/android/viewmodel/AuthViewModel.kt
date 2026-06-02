@@ -3,32 +3,35 @@ package com.darknote.android.viewmodel
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import androidx.browser.customtabs.CustomTabsIntent
-import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.darknote.sync.client.DropboxClient
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import javax.inject.Inject
 
 /**
  * ViewModel for handling Dropbox authentication in Android.
  */
-class AuthViewModel(
+@HiltViewModel
+class AuthViewModel @Inject constructor(
     private val dropboxClient: DropboxClient
 ) : ViewModel() {
     
-    private val _authState = mutableStateOf<AuthState>(AuthState.Idle)
-    val authState: State<AuthState> = _authState
+    private val _authState = MutableStateFlow<AuthState>(AuthState.Idle)
+    val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
-    private val _authUrl = mutableStateOf<String?>(null)
-    val authUrl: State<String?> = _authUrl
+    private val _authUrl = MutableStateFlow<String?>(null)
+    val authUrl: StateFlow<String?> = _authUrl.asStateFlow()
 
-    private val _syncLogs = mutableStateOf<List<SyncLog>>(emptyList())
-    val syncLogs: State<List<SyncLog>> = _syncLogs
+    private val _syncLogs = MutableStateFlow<List<SyncLog>>(emptyList())
+    val syncLogs: StateFlow<List<SyncLog>> = _syncLogs.asStateFlow()
 
     private fun addLog(message: String, type: LogType = LogType.INFO) {
         val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())

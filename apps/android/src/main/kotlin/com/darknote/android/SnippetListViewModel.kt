@@ -1,9 +1,7 @@
 package com.darknote.android
 
 import android.content.Intent
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.darknote.core.clipboard.ClipboardManager
 import com.darknote.core.model.Folder
@@ -12,8 +10,11 @@ import com.darknote.core.model.SyncStatus
 import com.darknote.core.repository.FolderRepository
 import com.darknote.core.repository.SnippetRepository
 import com.darknote.core.storage.FileStorageService
+import com.darknote.android.network.NetworkMonitor
 import com.darknote.sync.engine.SyncEngine
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,27 +45,39 @@ sealed class CreateSnippetState {
     data class Error(val message: String) : CreateSnippetState()
 }
 
-class SnippetListViewModel(
+sealed class UiState {
+    data object Loading : UiState()
+    data object Success : UiState()
+    data class Error(val message: String) : UiState()
+}
+
+@HiltViewModel
+class SnippetListViewModel @Inject constructor(
     private val snippetRepository: SnippetRepository,
     private val folderRepository: FolderRepository,
     private val storageService: FileStorageService,
     private val clipboardManager: ClipboardManager,
-    private val syncEngine: SyncEngine
+    private val syncEngine: SyncEngine,
+    private val networkMonitor: NetworkMonitor
 ) : ViewModel() {
 
-    private val _allSnippets = MutableStateFlow<List<Snippet>>(emptyList())
+    private val _allSnippets = snippetRepository.getAll()
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     private val _searchQuery = MutableStateFlow("")
     private val _showFavoritesOnly = MutableStateFlow(false)
     private val _sortOrder = MutableStateFlow(SortOrder.MODIFIED_DESC)
     private val _selectedFolderId = MutableStateFlow<String?>(null)
+    private val _selectedTag = MutableStateFlow<String?>(null)
 
     val filteredSnippets = combine(
-        _allSnippets,
-        _searchQuery,
-        _showFavoritesOnly,
-        _sortOrder,
-        _selectedFolderId
-    ) { snippets, query, favoritesOnly, sortOrder, folderId ->
+        combine(_allSnippets, _searchQuery, _showFavoritesOnly) { snippets, query, favoritesOnly ->
+            Triple(snippets, query, favoritesOnly)
+        },
+        combine(_sortOrder, _selectedFolderId, _selectedTag) { sortOrder, folderId, tag ->
+            Triple(sortOrder, folderId, tag)
+        }
+    ) { (snippets, query, favoritesOnly), (sortOrder, folderId, tag) ->
         var filtered = snippets.filter { snippet ->
             val matchesQuery = query.isBlank() ||
                 snippet.title.contains(query, ignoreCase = true) ||
@@ -74,8 +87,9 @@ class SnippetListViewModel(
 
             val matchesFavorite = !favoritesOnly || snippet.isFavorite
             val matchesFolder = folderId == null || snippet.folderId == folderId
+            val matchesTag = tag == null || snippet.tags.any { it.equals(tag, ignoreCase = true) }
 
-            matchesQuery && matchesFavorite && matchesFolder
+            matchesQuery && matchesFavorite && matchesFolder && matchesTag
         }
 
         filtered = when (sortOrder) {
@@ -92,6 +106,7 @@ class SnippetListViewModel(
     val showFavoritesOnly: StateFlow<Boolean> = _showFavoritesOnly.asStateFlow()
     val sortOrder: StateFlow<SortOrder> = _sortOrder.asStateFlow()
     val selectedFolderId: StateFlow<String?> = _selectedFolderId.asStateFlow()
+    val selectedTag: StateFlow<String?> = _selectedTag.asStateFlow()
 
     private val _copiedSnippetId = MutableStateFlow<String?>(null)
     val copiedSnippetId: StateFlow<String?> = _copiedSnippetId.asStateFlow()
@@ -111,15 +126,20 @@ class SnippetListViewModel(
     private val _recentSearches = MutableStateFlow<List<String>>(emptyList())
     val recentSearches: StateFlow<List<String>> = _recentSearches.asStateFlow()
 
+    val syncState: StateFlow<com.darknote.sync.engine.SyncState> = syncEngine.state
+    val syncLogs: StateFlow<List<com.darknote.sync.engine.SyncLog>> = syncEngine.logs
+    val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
+
     private val recentSnippets: StateFlow<List<Snippet>> = _allSnippets
         .combine(_selectedFolderId) { snippets, _ ->
             snippets.sortedByDescending { it.modifiedAt }.take(5)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val deletedSnippets = mutableMapOf<String, Snippet>()
+    private val deletionTimestamps = mutableMapOf<String, Long>()
+    private val DELETION_RETENTION_MS = 5 * 60 * 1000L // 5 minutes
 
     init {
-        loadSnippets()
         loadFolders()
         initialSync()
     }
@@ -131,7 +151,7 @@ class SnippetListViewModel(
                 syncEngine.sync()
                 Log.d("SnippetListViewModel", "Initial sync completed")
                 // Refresh UI after pulling remote data
-                loadSnippets()
+                // Snippets auto-refresh via reactive Flow
                 loadFolders()
             } catch (e: Exception) {
                 Log.w("SnippetListViewModel", "Initial sync failed: ${e.message}")
@@ -139,15 +159,7 @@ class SnippetListViewModel(
         }
     }
 
-    private fun loadSnippets() {
-        viewModelScope.launch {
-            snippetRepository.getAll()
-                .catch { emit(emptyList()) }
-                .collect { snippets ->
-                    _allSnippets.value = snippets
-                }
-        }
-    }
+
 
     private fun loadFolders() {
         viewModelScope.launch {
@@ -184,6 +196,10 @@ class SnippetListViewModel(
 
     fun selectFolder(folderId: String?) {
         _selectedFolderId.value = folderId
+    }
+
+    fun selectTag(tag: String?) {
+        _selectedTag.value = tag
     }
 
     fun copySnippet(snippet: Snippet) {
@@ -229,10 +245,14 @@ class SnippetListViewModel(
     fun deleteSnippet(snippet: Snippet) {
         viewModelScope.launch {
             deletedSnippets[snippet.id] = snippet
+            deletionTimestamps[snippet.id] = System.currentTimeMillis()
             snippetRepository.delete(snippet.id)
             
             // Trigger sync after delete
             triggerSync()
+            
+            // Schedule cleanup after retention period
+            cleanupOldDeletions()
             
             showSnackbar(
                 SnackbarData(
@@ -246,9 +266,22 @@ class SnippetListViewModel(
             )
         }
     }
+    
+    private fun cleanupOldDeletions() {
+        val cutoff = System.currentTimeMillis() - DELETION_RETENTION_MS
+        val iterator = deletionTimestamps.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (entry.value < cutoff) {
+                deletedSnippets.remove(entry.key)
+                iterator.remove()
+            }
+        }
+    }
 
     private suspend fun restoreSnippet(snippetId: String) {
         val snippet = deletedSnippets.remove(snippetId) ?: return
+        deletionTimestamps.remove(snippetId)
         snippetRepository.create(snippet)
         
         // Trigger sync after restore
@@ -293,7 +326,7 @@ class SnippetListViewModel(
                 }
                 
                 // Refresh the list to show new snippet
-                loadSnippets()
+                // Snippets auto-refresh via reactive Flow
                 _createState.value = CreateSnippetState.Created
                 
                 // Trigger sync after create
@@ -303,6 +336,30 @@ class SnippetListViewModel(
             } catch (e: Exception) {
                 _createState.value = CreateSnippetState.Error(e.message ?: "Failed to create snippet")
                 showSnackbar(SnackbarData("Failed to create snippet"))
+            }
+        }
+    }
+
+    fun renameSnippet(id: String, newTitle: String) {
+        viewModelScope.launch {
+            try {
+                val snippet = _allSnippets.value.find { it.id == id } ?: return@launch
+                val updated = snippet.copy(
+                    title = newTitle,
+                    modifiedAt = System.currentTimeMillis()
+                )
+                val result = snippetRepository.update(updated)
+                if (result.isFailure) {
+                    showSnackbar(SnackbarData("Failed to rename snippet: ${result.exceptionOrNull()?.message}"))
+                    return@launch
+                }
+                
+                // Snippets auto-refresh via reactive Flow
+                triggerSync()
+                showSnackbar(SnackbarData("Snippet renamed to \"$newTitle\""))
+            } catch (e: Exception) {
+                Log.e("SnippetListViewModel", "Failed to rename snippet", e)
+                showSnackbar(SnackbarData("Failed to rename snippet: ${e.message}"))
             }
         }
     }
@@ -331,10 +388,6 @@ class SnippetListViewModel(
                 }
                 Log.d("SnippetListViewModel", "Storage update successful")
                 
-                // Refresh the list to show updated content
-                loadSnippets()
-                Log.d("SnippetListViewModel", "Snippet list refreshed")
-                
                 // Trigger sync after update
                 triggerSync()
                 
@@ -350,7 +403,7 @@ class SnippetListViewModel(
         _isRefreshing.value = true
         viewModelScope.launch {
             kotlinx.coroutines.delay(800)
-            loadSnippets()
+            // Snippets auto-refresh via reactive Flow
             loadFolders()
             _isRefreshing.value = false
         }
@@ -406,12 +459,87 @@ class SnippetListViewModel(
                 Log.d("SnippetListViewModel", "Manual sync triggered")
                 syncEngine.sync()
                 Log.d("SnippetListViewModel", "Manual sync completed")
-                loadSnippets()
+                // Snippets auto-refresh via reactive Flow
                 loadFolders()
                 showSnackbar(SnackbarData("Sync complete"))
             } catch (e: Exception) {
                 Log.w("SnippetListViewModel", "Manual sync failed: ${e.message}")
                 showSnackbar(SnackbarData("Sync failed: ${e.message}"))
+            }
+        }
+    }
+
+    // FOLDER CRUD OPERATIONS
+
+    fun createFolder(name: String, parentId: String?) {
+        viewModelScope.launch {
+            try {
+                val id = UUID.randomUUID().toString()
+                val folder = Folder(
+                    id = id,
+                    name = name,
+                    parentId = parentId,
+                    sortOrder = 0,
+                    createdAt = System.currentTimeMillis()
+                )
+                val result = folderRepository.create(folder)
+                if (result.isFailure) {
+                    showSnackbar(SnackbarData("Failed to create folder: ${result.exceptionOrNull()?.message}"))
+                    return@launch
+                }
+                
+                // Trigger sync after create
+                triggerSync()
+                showSnackbar(SnackbarData("Folder \"$name\" created"))
+            } catch (e: Exception) {
+                Log.e("SnippetListViewModel", "Failed to create folder", e)
+                showSnackbar(SnackbarData("Failed to create folder: ${e.message}"))
+            }
+        }
+    }
+
+    fun renameFolder(id: String, newName: String) {
+        viewModelScope.launch {
+            try {
+                val folder = _folders.value.find { it.id == id } ?: return@launch
+                val updated = folder.copy(name = newName)
+                val result = folderRepository.update(updated)
+                if (result.isFailure) {
+                    showSnackbar(SnackbarData("Failed to rename folder: ${result.exceptionOrNull()?.message}"))
+                    return@launch
+                }
+                
+                // Trigger sync after update
+                triggerSync()
+                showSnackbar(SnackbarData("Folder renamed to \"$newName\""))
+            } catch (e: Exception) {
+                Log.e("SnippetListViewModel", "Failed to rename folder", e)
+                showSnackbar(SnackbarData("Failed to rename folder: ${e.message}"))
+            }
+        }
+    }
+
+    fun deleteFolder(id: String, moveChildrenToParent: Boolean) {
+        viewModelScope.launch {
+            try {
+                val folder = _folders.value.find { it.id == id } ?: return@launch
+                val result = folderRepository.delete(id, moveChildrenToParent)
+                if (result.isFailure) {
+                    showSnackbar(SnackbarData("Failed to delete folder: ${result.exceptionOrNull()?.message}"))
+                    return@launch
+                }
+                
+                // Clear selection if deleted folder was selected
+                if (_selectedFolderId.value == id) {
+                    _selectedFolderId.value = null
+                }
+                
+                // Trigger sync after delete
+                triggerSync()
+                showSnackbar(SnackbarData("Folder \"${folder.name}\" deleted"))
+            } catch (e: Exception) {
+                Log.e("SnippetListViewModel", "Failed to delete folder", e)
+                showSnackbar(SnackbarData("Failed to delete folder: ${e.message}"))
             }
         }
     }
@@ -423,6 +551,10 @@ class SnippetListViewModel(
     private fun triggerSync() {
         viewModelScope.launch {
             try {
+                if (!networkMonitor.isOnline.value) {
+                    Log.d("SnippetListViewModel", "Skipping sync — offline")
+                    return@launch
+                }
                 Log.d("SnippetListViewModel", "Triggering sync...")
                 syncEngine.sync()
                 Log.d("SnippetListViewModel", "Sync completed successfully")
@@ -430,24 +562,5 @@ class SnippetListViewModel(
                 Log.w("SnippetListViewModel", "Sync failed: ${e.message}")
             }
         }
-    }
-}
-
-class SnippetListViewModelFactory(
-    private val snippetRepository: SnippetRepository,
-    private val folderRepository: FolderRepository,
-    private val storageService: FileStorageService,
-    private val clipboardManager: ClipboardManager,
-    private val syncEngine: SyncEngine
-) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        @Suppress("UNCHECKED_CAST")
-        return SnippetListViewModel(
-            snippetRepository = snippetRepository,
-            folderRepository = folderRepository,
-            storageService = storageService,
-            clipboardManager = clipboardManager,
-            syncEngine = syncEngine
-        ) as T
     }
 }

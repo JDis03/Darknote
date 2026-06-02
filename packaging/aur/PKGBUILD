@@ -1,0 +1,68 @@
+# Maintainer: Your Name <your.email@example.com>
+pkgname=darknote
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Modern snippet manager with Dropbox sync - Desktop app for Linux"
+arch=('x86_64')
+url="https://github.com/yourusername/darknote"
+license=('GPL3')
+depends=('java-runtime>=17' 'sqlite')
+makedepends=('jdk17-openjdk' 'gradle')
+optdepends=(
+    'plasma-desktop: KDE Plasma integration'
+    'breeze: Native theme support'
+)
+source=("$pkgname-$pkgver.tar.gz::https://github.com/yourusername/darknote/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')  # Update with actual checksum
+
+prepare() {
+    cd "$srcdir/$pkgname-$pkgver"
+    # Ensure gradle wrapper is executable
+    chmod +x gradlew
+}
+
+build() {
+    cd "$srcdir/$pkgname-$pkgver"
+    
+    # Build the desktop JAR
+    ./gradlew :apps:desktop:jar
+}
+
+check() {
+    cd "$srcdir/$pkgname-$pkgver"
+    
+    # Run tests
+    ./gradlew :apps:desktop:test
+}
+
+package() {
+    cd "$srcdir/$pkgname-$pkgver"
+    
+    # Install JAR
+    install -Dm644 "apps/desktop/build/libs/desktop-${pkgver}.jar" \
+        "$pkgdir/usr/share/java/$pkgname/$pkgname.jar"
+    
+    # Install desktop entry
+    install -Dm644 "apps/desktop/packaging/darknote.desktop" \
+        "$pkgdir/usr/share/applications/darknote.desktop"
+    
+    # Install icons
+    for size in 48 128 256 512; do
+        install -Dm644 "apps/desktop/src/main/resources/icons/icon-${size}x${size}.png" \
+            "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/darknote.png"
+    done
+    
+    # Install launcher script
+    install -Dm755 /dev/stdin "$pkgdir/usr/bin/darknote" <<'EOF'
+#!/bin/bash
+exec java -jar /usr/share/java/darknote/darknote.jar "$@"
+EOF
+    
+    # Install license
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    
+    # Install documentation
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 apps/desktop/README.md "$pkgdir/usr/share/doc/$pkgname/DESKTOP_README.md"
+    install -Dm644 apps/desktop/KDE_INTEGRATION.md "$pkgdir/usr/share/doc/$pkgname/KDE_INTEGRATION.md"
+}

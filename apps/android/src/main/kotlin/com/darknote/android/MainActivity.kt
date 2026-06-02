@@ -6,70 +6,33 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
-import com.darknote.android.clipboard.AndroidClipboardManager
 import com.darknote.android.ui.navigation.DarkNoteNavHost
 import com.darknote.android.ui.theme.DarkNoteTheme
-import com.darknote.core.clipboard.ClipboardSanitizer
 import com.darknote.core.data.DemoDataInitializer
-import com.darknote.core.model.ClipboardSettings
+import com.darknote.core.repository.FolderRepository
+import com.darknote.core.repository.SnippetRepository
 import com.darknote.core.storage.FileStorageService
-import com.darknote.persistence.database.AndroidDriverFactory
-import com.darknote.persistence.database.DatabaseFactory
-import com.darknote.sync.client.DropboxClientFactory
-import com.darknote.sync.engine.SyncEngine
-import com.darknote.android.viewmodel.AuthViewModel
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
-import java.io.File
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject lateinit var snippetRepository: SnippetRepository
+    @Inject lateinit var folderRepository: FolderRepository
+    @Inject lateinit var storageService: FileStorageService
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Initialize Dropbox client factory (uses same app key as Desktop)
-        DropboxClientFactory.initialize(this)
-
-        val storageDir = File(filesDir, "snippets").apply { mkdirs() }
-        // NOTE: baseDirectory must NOT include "snippets" — the path
-        // from generateSafePath already includes that prefix.
-        val storageService = FileStorageService(filesDir)
-        val databaseFactory = DatabaseFactory(AndroidDriverFactory(this))
-        val clipboardManager = AndroidClipboardManager(
-            ClipboardSanitizer(ClipboardSettings.DEFAULT),
-            this
-        )
-
-        // Shared Dropbox client — auth + sync must use same instance
-        val dropboxClient = DropboxClientFactory.create()
-
-        val syncEngine = SyncEngine(
-            dropboxClient = dropboxClient,
-            snippetRepository = databaseFactory.snippetRepository,
-            folderRepository = databaseFactory.folderRepository,
-            syncMetadataRepository = databaseFactory.syncMetadataRepository,
-            storageService = storageService
-        )
-
-        val viewModel = SnippetListViewModel(
-            snippetRepository = databaseFactory.snippetRepository,
-            folderRepository = databaseFactory.folderRepository,
-            storageService = storageService,
-            clipboardManager = clipboardManager,
-            syncEngine = syncEngine
-        )
-
-        val authViewModel = AuthViewModel(
-            dropboxClient = dropboxClient
-        )
-
         lifecycleScope.launch {
             val demoDataInitializer = DemoDataInitializer(
-                folderRepository = databaseFactory.folderRepository,
-                snippetRepository = databaseFactory.snippetRepository,
+                folderRepository = folderRepository,
+                snippetRepository = snippetRepository,
                 fileStorageService = storageService
             )
             demoDataInitializer.initializeIfEmpty()
@@ -81,13 +44,9 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = androidx.compose.material3.MaterialTheme.colorScheme.background
                 ) {
-                    DarkNoteNavHost(
-                        viewModel = viewModel,
-                        authViewModel = authViewModel
-                    )
+                    DarkNoteNavHost()
                 }
             }
         }
-        
     }
 }

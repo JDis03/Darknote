@@ -3,6 +3,7 @@ package com.darknote.android.ui.components
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Share
@@ -21,6 +22,7 @@ import androidx.compose.ui.unit.dp
 fun SnippetContextMenu(
     isFavorite: Boolean,
     onEdit: () -> Unit,
+    onRename: () -> Unit,
     onCopy: () -> Unit,
     onCopyRaw: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -30,6 +32,13 @@ fun SnippetContextMenu(
     DropdownMenuItem(
         text = { Text("Edit") },
         onClick = onEdit,
+        leadingIcon = {
+            Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    )
+    DropdownMenuItem(
+        text = { Text("Rename") },
+        onClick = onRename,
         leadingIcon = {
             Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -64,6 +73,27 @@ fun SnippetContextMenu(
         onClick = onShare,
         leadingIcon = {
             Icon(Icons.Default.Share, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    )
+    DropdownMenuItem(
+        text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+        onClick = onDelete,
+        leadingIcon = {
+            Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+        }
+    )
+}
+
+@Composable
+fun FolderContextMenu(
+    onRename: () -> Unit,
+    onDelete: () -> Unit
+) {
+    DropdownMenuItem(
+        text = { Text("Rename") },
+        onClick = onRename,
+        leadingIcon = {
+            Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     )
     DropdownMenuItem(

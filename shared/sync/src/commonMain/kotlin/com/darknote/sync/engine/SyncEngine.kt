@@ -3,6 +3,8 @@ package com.darknote.sync.engine
 import com.darknote.core.model.Snippet
 import com.darknote.core.model.SyncMetadata
 import com.darknote.core.model.SyncStatus as SnippetSyncStatus
+import com.darknote.core.repository.DeletedSnippet
+import com.darknote.core.repository.DeletedSnippetRepository
 import com.darknote.core.repository.SnippetRepository
 import com.darknote.core.repository.FolderRepository
 import com.darknote.core.repository.SyncMetadataRepository
@@ -22,12 +24,19 @@ import kotlinx.serialization.Serializable
 /**
  * Sync engine inspired by Joplin's synchronization architecture.
  * Handles bidirectional sync with conflict resolution.
+ *
+ * Deletion strategy (tombstone-based, like Joplin's deleted_items):
+ * - When a snippet is deleted locally, a tombstone is written to deleted_snippet table.
+ * - On sync, tombstones drive remote deletion instead of set-subtraction heuristics.
+ * - Tombstones are cleared once remote deletion is confirmed.
+ * - Conflict (local delete vs remote update): remote wins if remote is newer; delete wins otherwise.
  */
 class SyncEngine(
     private val dropboxClient: DropboxClient,
     private val snippetRepository: SnippetRepository,
     private val folderRepository: FolderRepository,
     private val syncMetadataRepository: SyncMetadataRepository,
+    private val deletedSnippetRepository: DeletedSnippetRepository,
     private val storageService: FileStorageService
 ) {
     
@@ -64,20 +73,31 @@ class SyncEngine(
                 _progress.value = SyncProgress(1, 6, "Detecting changes...")
 
                 val remoteFiles = listRemoteFiles()
-                val localChanges = detectLocalChanges()
-                val remoteChanges = detectRemoteChanges(remoteFiles)
+
+                // Step 3.5: Process local deletions FIRST (before remote change detection).
+                // This mirrors Joplin's delete_remote step which runs before download.
+                // processLocalDeletions returns IDs where "remote wins" (remote newer than deletion)
+                // so they can be excluded from tombstoneIds and picked up as downloads.
+                _progress.value = SyncProgress(2, 6, "Processing deletions...")
                 val localDeletions = detectLocalDeletions()
+                val tombstoneIds = localDeletions.map { it.id }.toSet()
+                val restoredFromRemote = processLocalDeletions(localDeletions, remoteFiles)
+
+                // Remote changes: skip tombstoned IDs (deleted locally and not restored)
+                val activeTombstoneIds = tombstoneIds - restoredFromRemote
+                val localChanges = detectLocalChanges()
+                val remoteChanges = detectRemoteChanges(remoteFiles, activeTombstoneIds)
                 val remoteDeletions = detectRemoteDeletions(remoteFiles)
 
                 addLog("Found ${localChanges.size} local changes, ${remoteChanges.size} remote changes", SyncLogType.INFO)
                 addLog("Found ${localDeletions.size} local deletions, ${remoteDeletions.size} remote deletions", SyncLogType.INFO)
 
-                // Step 3.5: Process deletions first
-                _progress.value = SyncProgress(2, 6, "Processing deletions...")
-                processLocalDeletions(localDeletions)
-                processRemoteDeletions(remoteDeletions)
+                // Don't delete local snippets if there's a corresponding local change (conflict: local update vs remote delete)
+                val localChangedIds = localChanges.map { it.snippet.id }.toSet()
+                val safeRemoteDeletions = remoteDeletions.filter { it !in localChangedIds }
+                processRemoteDeletions(safeRemoteDeletions)
 
-                // Step 4: Resolve conflicts
+                // Step 5: Resolve conflicts
                 _progress.value = SyncProgress(3, 6, "Resolving conflicts...")
                 val resolvedChanges = resolveConflicts(localChanges, remoteChanges)
 
@@ -131,29 +151,63 @@ class SyncEngine(
         return changes
     }
 
-    private suspend fun detectLocalDeletions(): List<String> {
-        val localIds = snippetRepository.getAllCached().map { it.id }.toSet()
-        val allMetadata = syncMetadataRepository.getAll()
+    /**
+     * Reads tombstones from deleted_snippet table.
+     * Returns only tombstones for snippets that were previously synced (have remote files).
+     * Snippets never synced don't need remote deletion.
+     */
+    private suspend fun detectLocalDeletions(): List<DeletedSnippet> {
+        val tombstones = deletedSnippetRepository.getAll()
 
-        return allMetadata
-            .filter { it.snippetId !in localIds }
-            .map { it.snippetId }
-            .also { deletedIds ->
-                deletedIds.forEach { addLog("Local deletion: $it", SyncLogType.INFO) }
-            }
+        return tombstones.also { deleted ->
+            deleted.forEach { addLog("Local deletion: ${it.id}", SyncLogType.INFO) }
+        }
     }
 
-    private suspend fun processLocalDeletions(deletedIds: List<String>) {
-        for (id in deletedIds) {
+    /**
+     * Processes local deletions using tombstone data.
+     *
+     * Conflict resolution for "local delete + remote update" (inspired by Joplin):
+     * - If remote was modified AFTER local deletion → remote wins: clear tombstone so the
+     *   file gets picked up as a download in the next step.
+     * - If local deletion is newer (or equal) → delete wins: delete from remote, clear tombstone.
+     *
+     * @return Set of snippet IDs where remote won (tombstone cleared, file should be re-downloaded).
+     */
+    private suspend fun processLocalDeletions(
+        tombstones: List<DeletedSnippet>,
+        remoteFiles: List<RemoteFile>
+    ): Set<String> {
+        val remoteBySnippetId = remoteFiles.associateBy { extractSnippetIdFromPath(it.path) }
+        val restoredIds = mutableSetOf<String>()
+
+        for (tombstone in tombstones) {
             try {
-                val remotePath = "/darknote/$id.txt"
-                dropboxClient.deleteFile(remotePath)
-                syncMetadataRepository.delete(id)
-                addLog("Deleted remote file for $id", SyncLogType.SUCCESS)
+                val remoteFile = remoteBySnippetId[tombstone.id]
+
+                if (remoteFile != null && remoteFile.modifiedTime > tombstone.deletedAt) {
+                    // Remote was updated AFTER local deletion → remote wins.
+                    // Clear tombstone so detectRemoteChanges() picks this up as a download.
+                    addLog(
+                        "Deletion conflict: remote version of ${tombstone.id} is newer than local deletion, restoring",
+                        SyncLogType.WARNING
+                    )
+                    deletedSnippetRepository.delete(tombstone.id)
+                    restoredIds.add(tombstone.id)
+                } else {
+                    // Local deletion wins: delete from remote and clear tombstone.
+                    val remotePath = "/darknote/${tombstone.id}.txt"
+                    dropboxClient.deleteFile(remotePath)
+                    syncMetadataRepository.delete(tombstone.id)
+                    deletedSnippetRepository.delete(tombstone.id)
+                    addLog("Deleted remote file: ${tombstone.id}", SyncLogType.SUCCESS)
+                }
             } catch (e: Exception) {
-                addLog("Failed to delete remote file for $id: ${e.message}", SyncLogType.WARNING)
+                addLog("Failed to process deletion for ${tombstone.id}: ${e.message}", SyncLogType.WARNING)
             }
         }
+
+        return restoredIds
     }
 
     private suspend fun detectRemoteDeletions(remoteFiles: List<RemoteFile>): List<String> {
@@ -211,12 +265,22 @@ class SyncEngine(
 
     /**
      * Detect changes in remote files since last sync.
+     *
+     * Skips files that have a local tombstone (user intentionally deleted them).
+     * Those are handled by processLocalDeletions() instead.
      */
-    private suspend fun detectRemoteChanges(remoteFiles: List<RemoteFile>): List<RemoteChange> {
+    private suspend fun detectRemoteChanges(
+        remoteFiles: List<RemoteFile>,
+        tombstoneIds: Set<String>
+    ): List<RemoteChange> {
         val changes = mutableListOf<RemoteChange>()
 
         for (remoteFile in remoteFiles) {
             val snippetId = extractSnippetIdFromPath(remoteFile.path)
+
+            // Skip tombstoned IDs - they're handled in processLocalDeletions()
+            if (snippetId in tombstoneIds) continue
+
             val localSnippet = snippetRepository.getByIdCached(snippetId)
             val syncMetadata = syncMetadataRepository.getBySnippetId(snippetId)
 

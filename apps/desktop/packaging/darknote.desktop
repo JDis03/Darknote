@@ -1,0 +1,32 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=DarkNote
+GenericName=Snippet Manager
+Comment=Modern snippet manager with Dropbox sync
+Exec=darknote %U
+Icon=darknote
+Terminal=false
+Categories=Utility;TextEditor;Development;
+Keywords=snippet;code;clipboard;sync;dropbox;
+MimeType=text/plain;
+StartupNotify=true
+StartupWMClass=DarkNote
+
+# KDE specific
+X-KDE-StartupNotify=true
+X-DBUS-StartupType=
+X-DBUS-ServiceName=
+X-KDE-SubstituteUID=false
+X-KDE-Username=
+
+# Actions for KDE
+Actions=NewSnippet;Search;
+
+[Desktop Action NewSnippet]
+Name=New Snippet
+Exec=darknote --new
+
+[Desktop Action Search]
+Name=Search Snippets
+Exec=darknote --search

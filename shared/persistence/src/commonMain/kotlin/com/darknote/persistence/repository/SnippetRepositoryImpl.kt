@@ -105,6 +105,10 @@ class SnippetRepositoryImpl(
     override suspend fun delete(id: String): Result<Unit> {
         return try {
             withContext(Dispatchers.Default) {
+                // Insert tombstone BEFORE deleting, so the sync engine knows
+                // this was intentionally deleted (not just missing from remote).
+                // This prevents the file from being re-downloaded on next sync.
+                queries.insertDeletedSnippet(id, System.currentTimeMillis())
                 queries.deleteSnippet(id)
             }
             Result.success(Unit)

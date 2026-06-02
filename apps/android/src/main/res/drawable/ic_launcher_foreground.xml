@@ -1,52 +1,28 @@
-<!-- DarkNote Launcher Icon - GitHub Dark Theme Inspired -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    
-    <!-- Background -->
-    <path
-        android:fillColor="#0D1117"
-        android:pathData="M0,0h108v108h-108z"/>
-    
-    <!-- DarkNote "N" composed of code brackets and note -->
+    <!-- Code brackets symbol with snippet lines -->
     
     <!-- Left bracket -->
     <path
         android:fillColor="#58A6FF"
-        android:pathData="M25,22 L35,22 L28,54 L35,86 L25,86 L18,54 Z"/>
+        android:pathData="M32,40 L28,44 L28,64 L32,68 L36,68 L36,64 L32,64 L32,44 L36,44 L36,40 Z"/>
     
     <!-- Right bracket -->
     <path
         android:fillColor="#58A6FF"
-        android:pathData="M73,22 L83,22 L90,54 L83,86 L73,86 L80,54 Z"/>
+        android:pathData="M76,40 L72,40 L72,44 L76,44 L76,64 L72,64 L72,68 L76,68 L80,64 L80,44 Z"/>
     
-    <!-- Central note/document -->
+    <!-- Code lines (snippet content representation) -->
     <path
         android:fillColor="#238636"
-        android:pathData="M42,20 L66,20 L66,65 L54,80 L42,65 Z"/>
-    
-    <!-- Note fold -->
+        android:pathData="M40,46 L68,46 L68,50 L40,50 Z"/>
     <path
-        android:fillColor="#2EA043"
-        android:pathData="M66,20 L66,30 L54,30 L54,20 Z"/>
-    
-    <!-- Note lines -->
-    <path
-        android:fillColor="#C9D1D9"
-        android:pathData="M46,38 L62,38 L62,41 L46,41 Z"/>
-    
-    <path
-        android:fillColor="#C9D1D9"
-        android:pathData="M46,46 L62,46 L62,49 L46,49 Z"/>
-    
-    <path
-        android:fillColor="#C9D1D9"
-        android:pathData="M46,54 L56,54 L56,57 L46,57 Z"/>
-    
-    <!-- Unsaved indicator dot -->
+        android:fillColor="#238636"
+        android:pathData="M40,54 L62,54 L62,58 L40,58 Z"/>
     <path
         android:fillColor="#F85149"
-        android:pathData="M58,55 L62,55 L62,59 L58,59 Z"/>
+        android:pathData="M40,62 L56,62 L56,66 L40,66 Z"/>
 </vector>
