@@ -1,0 +1,44 @@
+{
+  "features": [
+    {
+      "id": "feat-001",
+      "name": "Snippet Creation and Editing",
+      "description": "Rich text editor with syntax highlighting, language detection, and auto-save for code snippets",
+      "dependencies": [],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-002",
+      "name": "Dropbox Sync Integration",
+      "description": "Automated sync of snippets and metadata to Dropbox using SDK with conflict resolution and offline support",
+      "dependencies": ["feat-001"],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-003",
+      "name": "Tag-based Organization",
+      "description": "Hierarchical tag system with auto-complete, bulk tagging, and tag-based filtering and search",
+      "dependencies": ["feat-002"],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-004",
+      "name": "Full-Text Search Engine",
+      "description": "SQLDelight-powered full-text search across snippet content, tags, and metadata with relevance ranking",
+      "dependencies": ["feat-003"],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-005",
+      "name": "Markdown Rendering",
+      "description": "Live Markdown preview with code block syntax highlighting, Mermaid diagram support, and export to PDF/HTML",
+      "dependencies": ["feat-004"],
+      "status": "not-started",
+      "evidence": ""
+    }
+  ]
+}
