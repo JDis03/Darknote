@@ -28,6 +28,8 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
+enum class EditorSaveStatus { Idle, Saving, Saved, Error }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdvancedEditorScreen(
@@ -354,8 +356,8 @@ fun AdvancedEditorScreen(
                 }
             )
             
-            Divider()
-            
+            HorizontalDivider()
+
             // Code editor
             CodeEditor(
                 value = contentField,

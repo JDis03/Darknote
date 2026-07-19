@@ -2,6 +2,7 @@ package com.darknote.desktop.ui.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.NavigateNext
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -186,7 +187,7 @@ fun FindReplaceDialog(
                             },
                             enabled = findText.isNotEmpty()
                         ) {
-                            Icon(Icons.Default.NavigateNext, null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.AutoMirrored.Filled.NavigateNext, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Find Next")
                         }

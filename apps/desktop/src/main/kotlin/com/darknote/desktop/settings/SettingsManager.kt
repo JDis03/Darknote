@@ -1,14 +1,14 @@
 package com.darknote.desktop.settings
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import java.io.File
 
 /**
  * Theme mode options.
  */
+@Serializable
 enum class ThemeMode {
     DARK,
     LIGHT,
@@ -20,14 +20,8 @@ enum class ThemeMode {
  */
 @Serializable
 data class AppSettings(
-    val themeMode: String = "system"  // "dark", "light", "system"
-) {
-    fun getThemeMode(): ThemeMode = when (themeMode.lowercase()) {
-        "dark" -> ThemeMode.DARK
-        "light" -> ThemeMode.LIGHT
-        else -> ThemeMode.SYSTEM
-    }
-}
+    val themeMode: ThemeMode = ThemeMode.SYSTEM
+)
 
 /**
  * Manages persistent application settings.
@@ -42,53 +36,22 @@ class SettingsManager {
     private val settingsFile = File(settingsDir, "settings.json")
 
     init {
-        // Ensure settings directory exists
         if (!settingsDir.exists()) {
             settingsDir.mkdirs()
         }
     }
 
-    /**
-     * Load settings from disk. Returns default settings if file doesn't exist.
-     */
-    fun load(): AppSettings {
-        return try {
-            if (settingsFile.exists()) {
-                val content = settingsFile.readText()
-                json.decodeFromString<AppSettings>(content)
-            } else {
-                AppSettings()
-            }
-        } catch (e: Exception) {
-            println("Failed to load settings: ${e.message}")
+    fun load(): AppSettings = runCatching {
+        if (settingsFile.exists()) {
+            json.decodeFromString<AppSettings>(settingsFile.readText())
+        } else {
             AppSettings()
         }
+    }.getOrElse { AppSettings() }
+
+    fun save(settings: AppSettings) = runCatching {
+        settingsFile.writeText(json.encodeToString(settings))
     }
 
-    /**
-     * Save settings to disk.
-     */
-    fun save(settings: AppSettings) {
-        try {
-            val content = json.encodeToString(settings)
-            settingsFile.writeText(content)
-        } catch (e: Exception) {
-            println("Failed to save settings: ${e.message}")
-        }
-    }
-
-    /**
-     * Update theme mode and save.
-     */
-    fun setThemeMode(mode: ThemeMode) {
-        val current = load()
-        val updated = current.copy(
-            themeMode = when (mode) {
-                ThemeMode.DARK -> "dark"
-                ThemeMode.LIGHT -> "light"
-                ThemeMode.SYSTEM -> "system"
-            }
-        )
-        save(updated)
-    }
+    fun setThemeMode(mode: ThemeMode) = save(load().copy(themeMode = mode))
 }

@@ -42,12 +42,15 @@ class SyncEngine(
     
     private val _state = MutableStateFlow<SyncState>(SyncState.Idle)
     val state: StateFlow<SyncState> = _state.asStateFlow()
-    
+
     private val _progress = MutableStateFlow<SyncProgress?>(null)
     val progress: StateFlow<SyncProgress?> = _progress.asStateFlow()
-    
+
     private val _logs = MutableStateFlow<List<SyncLog>>(emptyList())
     val logs: StateFlow<List<SyncLog>> = _logs.asStateFlow()
+
+    // Mutex prevents concurrent syncs from corrupting state
+    private val syncLock = kotlinx.coroutines.sync.Mutex()
     
     /**
      * Perform complete bidirectional synchronization.
@@ -65,8 +68,10 @@ class SyncEngine(
             addLog("Authentication verified", SyncLogType.SUCCESS)
             
             // Step 2: Acquire sync lock to prevent concurrent syncs
-            acquireSyncLock()
-            
+            if (!syncLock.tryLock()) {
+                addLog("Another sync is already in progress", SyncLogType.WARNING)
+                return@withContext Result.failure(SyncException("Sync already in progress"))
+            }
             try {
                 // Step 3: Detect changes
                 addLog("Detecting local and remote changes...", SyncLogType.INFO)
@@ -456,15 +461,8 @@ class SyncEngine(
         _logs.value = (_logs.value + log).takeLast(100) // Keep last 100 logs
     }
     
-    private suspend fun acquireSyncLock() {
-        // Simple lock mechanism - create a lock file on Dropbox
-        addLog("Acquiring sync lock...", SyncLogType.INFO)
-        // TODO: Implement lock file creation
-    }
-    
-    private suspend fun releaseSyncLock() {
-        addLog("Releasing sync lock...", SyncLogType.INFO)
-        // TODO: Implement lock file deletion
+    private fun releaseSyncLock() {
+        runCatching { syncLock.unlock() }
     }
     
     // Helper methods

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -58,7 +59,7 @@ fun FolderSidebar(
                 }
             }
 
-            Divider()
+            HorizontalDivider()
 
             // "All Snippets" item
             FolderItem(
@@ -69,7 +70,7 @@ fun FolderSidebar(
                 depth = 0
             )
 
-            Divider()
+            HorizontalDivider()
 
             // Folder tree
             LazyColumn(
@@ -206,7 +207,7 @@ private fun FolderItem(
                 modifier = Modifier.size(20.dp)
             ) {
                 Icon(
-                    Icons.Default.ArrowRight,
+                    Icons.AutoMirrored.Filled.ArrowRight,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp)
                 )

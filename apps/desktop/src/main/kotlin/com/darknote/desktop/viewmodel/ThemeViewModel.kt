@@ -27,8 +27,7 @@ class ThemeViewModel(
     }
 
     private fun loadTheme() {
-        val settings = settingsManager.load()
-        _themeMode.value = settings.getThemeMode()
+        _themeMode.value = settingsManager.load().themeMode
         updateColorScheme()
     }
 

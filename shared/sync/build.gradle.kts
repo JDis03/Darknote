@@ -18,9 +18,15 @@ android {
     }
 }
 
+@OptIn(org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi::class)
 kotlin {
     jvm()
     androidTarget()
+
+    // Suppress KMP expect/actual beta warnings (KT-61573)
+    compilerOptions {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
 
     sourceSets {
         val commonMain by getting {

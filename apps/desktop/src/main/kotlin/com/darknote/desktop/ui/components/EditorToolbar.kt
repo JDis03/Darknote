@@ -2,6 +2,8 @@ package com.darknote.desktop.ui.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
+import androidx.compose.material.icons.automirrored.filled.WrapText
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -55,7 +57,7 @@ fun EditorToolbar(
                     onDismissRequest = { showLanguageMenu = false }
                 ) {
                     LanguageMenuItem("Plain Text", null, language, onLanguageChange) { showLanguageMenu = false }
-                    Divider()
+                    HorizontalDivider()
                     LanguageMenuItem("Kotlin", "kotlin", language, onLanguageChange) { showLanguageMenu = false }
                     LanguageMenuItem("Java", "java", language, onLanguageChange) { showLanguageMenu = false }
                     LanguageMenuItem("Python", "python", language, onLanguageChange) { showLanguageMenu = false }
@@ -85,7 +87,7 @@ fun EditorToolbar(
                 onClick = onFormat,
                 modifier = Modifier.size(36.dp)
             ) {
-                Icon(Icons.Default.FormatAlignLeft, "Format", modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Filled.FormatAlignLeft, "Format", modifier = Modifier.size(20.dp))
             }
             
             VerticalDivider(modifier = Modifier.height(24.dp))
@@ -97,7 +99,7 @@ fun EditorToolbar(
                 modifier = Modifier.size(36.dp)
             ) {
                 Icon(
-                    Icons.Default.WrapText,
+                    Icons.AutoMirrored.Filled.WrapText,
                     "Word Wrap",
                     modifier = Modifier.size(20.dp),
                     tint = if (wordWrap) MaterialTheme.colorScheme.primary 

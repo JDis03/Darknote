@@ -12,3 +12,7 @@ gradle-8.8-bin.zip
 
 # Internal docs
 docs/JOPLIN_LEARNINGS.md
+
+# Tooling artifacts (not source)
+.memory-project
+AGENTS.md.backup-*
