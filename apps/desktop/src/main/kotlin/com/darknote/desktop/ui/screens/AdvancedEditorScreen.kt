@@ -350,10 +350,7 @@ fun AdvancedEditorScreen(
                 onWordWrapToggle = { wordWrap = !wordWrap },
                 showLineNumbers = showLineNumbers,
                 onLineNumbersToggle = { showLineNumbers = !showLineNumbers },
-                onFind = { showFindDialog = true },
-                onFormat = {
-                    // TODO: Implement code formatting
-                }
+                onFind = { showFindDialog = true }
             )
             
             HorizontalDivider()

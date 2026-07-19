@@ -122,25 +122,25 @@ class AuthViewModel @Inject constructor(
     }
 
     /**
-     * Test upload functionality.
+     * Test upload functionality — used by Settings "Test Connection" button.
      */
     fun testUpload() {
         viewModelScope.launch {
             try {
                 addLog("Testing upload...", LogType.INFO)
-                
+
                 // Create a test file
                 val testContent = "Test upload from DarkNote Android - ${Date()}"
                 val testFile = java.io.File.createTempFile("darknote_test", ".txt")
                 testFile.writeText(testContent)
-                
+
                 val result = dropboxClient.uploadFile(
                     localPath = testFile.absolutePath,
                     remotePath = "/darknote/test-snippet-android-${System.currentTimeMillis()}.txt"
                 )
-                
+
                 testFile.delete() // Clean up
-                
+
                 if (result.isSuccess) {
                     addLog("Upload successful! Revision: ${result.getOrNull()}", LogType.SUCCESS)
                 } else {
@@ -154,7 +154,7 @@ class AuthViewModel @Inject constructor(
     }
 
     /**
-     * Test download functionality.
+     * Test download functionality — used by Settings "Test Connection" button.
      */
     fun testDownload() {
         viewModelScope.launch {
@@ -208,11 +208,11 @@ class AuthViewModel @Inject constructor(
  * Authentication states.
  */
 sealed class AuthState {
-    object Idle : AuthState()
-    object NotAuthenticated : AuthState()
-    object Authorizing : AuthState()
-    object Authenticated : AuthState()
-    object Offline : AuthState()
+    data object Idle : AuthState()
+    data object NotAuthenticated : AuthState()
+    data object Authorizing : AuthState()
+    data object Authenticated : AuthState()
+    data object Offline : AuthState()
     data class Error(val message: String) : AuthState()
 }
 

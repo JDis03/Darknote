@@ -5,10 +5,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
 
-/**
- * Theme mode options.
- */
-@Serializable
+/** Theme mode options. */
 enum class ThemeMode {
     DARK,
     LIGHT,
@@ -16,42 +13,67 @@ enum class ThemeMode {
 }
 
 /**
- * Application settings stored in ~/.config/darknote/settings.json
+ * Application settings stored in ~/.config/darknote/settings.json.
+ *
+ * `themeMode` is intentionally stored as a lowercase String (not the enum) for
+ * forward/backward compatibility and to tolerate unknown values gracefully.
+ * Use [themeModeEnum] to read the typed enum.
  */
 @Serializable
 data class AppSettings(
-    val themeMode: ThemeMode = ThemeMode.SYSTEM
-)
+    val themeMode: String = DEFAULT_THEME
+) {
+    /** Typed enum view of [themeMode]. Unknown values map to [ThemeMode.SYSTEM]. */
+    val themeModeEnum: ThemeMode
+        get() = when (themeMode.lowercase()) {
+            "dark" -> ThemeMode.DARK
+            "light" -> ThemeMode.LIGHT
+            else -> ThemeMode.SYSTEM
+        }
+
+    companion object {
+        const val DEFAULT_THEME = "system"
+        val DEFAULT = AppSettings()
+    }
+}
 
 /**
  * Manages persistent application settings.
  */
-class SettingsManager {
+open class SettingsManager {
     private val json = Json {
         prettyPrint = true
         ignoreUnknownKeys = true
+        encodeDefaults = true  // explicit, even though "system" is default
     }
 
-    private val settingsDir = File(System.getProperty("user.home"), ".config/darknote")
-    private val settingsFile = File(settingsDir, "settings.json")
+    /** Override to use a custom directory (tests). */
+    protected open fun resolveDir(): File = File(System.getProperty("user.home"), ".config/darknote")
 
-    init {
-        if (!settingsDir.exists()) {
-            settingsDir.mkdirs()
-        }
-    }
+    private val settingsDir: File by lazy { resolveDir().also { if (!it.exists()) it.mkdirs() } }
+    private val settingsFile: File by lazy { File(settingsDir, "settings.json") }
 
     fun load(): AppSettings = runCatching {
         if (settingsFile.exists()) {
             json.decodeFromString<AppSettings>(settingsFile.readText())
         } else {
-            AppSettings()
+            AppSettings.DEFAULT
         }
-    }.getOrElse { AppSettings() }
+    }.getOrElse { AppSettings.DEFAULT }
 
-    fun save(settings: AppSettings) = runCatching {
+    /** @return true if persisted, false on disk error. */
+    fun save(settings: AppSettings): Boolean = runCatching {
         settingsFile.writeText(json.encodeToString(settings))
-    }
+        true
+    }.getOrDefault(false)
 
-    fun setThemeMode(mode: ThemeMode) = save(load().copy(themeMode = mode))
+    /** @return true if persisted, false on disk error. */
+    fun setThemeMode(mode: ThemeMode): Boolean {
+        val key = when (mode) {
+            ThemeMode.DARK -> "dark"
+            ThemeMode.LIGHT -> "light"
+            ThemeMode.SYSTEM -> AppSettings.DEFAULT_THEME
+        }
+        return save(load().copy(themeMode = key))
+    }
 }

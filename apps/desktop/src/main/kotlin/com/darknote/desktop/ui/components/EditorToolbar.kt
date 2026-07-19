@@ -2,7 +2,6 @@ package com.darknote.desktop.ui.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
 import androidx.compose.material.icons.automirrored.filled.WrapText
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -24,7 +23,6 @@ fun EditorToolbar(
     showLineNumbers: Boolean,
     onLineNumbersToggle: () -> Unit,
     onFind: () -> Unit,
-    onFormat: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -81,17 +79,9 @@ fun EditorToolbar(
             ) {
                 Icon(Icons.Default.Search, "Find", modifier = Modifier.size(20.dp))
             }
-            
-            // Format code
-            IconButton(
-                onClick = onFormat,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(Icons.AutoMirrored.Filled.FormatAlignLeft, "Format", modifier = Modifier.size(20.dp))
-            }
-            
+
             VerticalDivider(modifier = Modifier.height(24.dp))
-            
+
             // Word wrap toggle
             IconToggleButton(
                 checked = wordWrap,

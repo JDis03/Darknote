@@ -11,6 +11,14 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.util.UUID
 
+/** Timing constants (millis) — kept here so they are easy to tune & audit. */
+private object Timing {
+    const val FLOW_STOP_TIMEOUT_MS = 5_000L
+    const val INITIAL_SYNC_DELAY_MS = 1_000L
+    const val POST_CREATE_DELAY_MS = 500L
+    const val SNACKBAR_DURATION_MS = 3_000L
+}
+
 data class SnackbarData(
     val message: String,
     val actionLabel: String? = null,
@@ -31,6 +39,16 @@ sealed class CreateSnippetState {
     data class Error(val message: String) : CreateSnippetState()
 }
 
+/** Single source of truth for snippet list filtering. */
+private data class FilterInputs(
+    val snippets: List<Snippet> = emptyList(),
+    val query: String = "",
+    val favoritesOnly: Boolean = false,
+    val sortOrder: SortOrder = SortOrder.MODIFIED_DESC,
+    val folderId: String? = null,
+    val tag: String? = null,
+)
+
 class SnippetListViewModel(
     private val snippetRepository: SnippetRepository,
     private val folderRepository: FolderRepository,
@@ -40,59 +58,56 @@ class SnippetListViewModel(
 ) {
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
-    private val _allSnippets = snippetRepository.getAll()
+    // Reactive folder list (single source of truth, no manual collect)
+    val folders: StateFlow<List<Folder>> = folderRepository.getAll()
         .catch { emit(emptyList()) }
-        .stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
-    
-    private val _searchQuery = MutableStateFlow("")
-    private val _showFavoritesOnly = MutableStateFlow(false)
-    private val _sortOrder = MutableStateFlow(SortOrder.MODIFIED_DESC)
-    private val _selectedFolderId = MutableStateFlow<String?>(null)
-    private val _selectedTag = MutableStateFlow<String?>(null)
+        .stateIn(scope, SharingStarted.WhileSubscribed(Timing.FLOW_STOP_TIMEOUT_MS), emptyList())
 
-    val filteredSnippets = combine(
-        combine(_allSnippets, _searchQuery, _showFavoritesOnly) { snippets, query, favoritesOnly ->
-            Triple(snippets, query, favoritesOnly)
-        },
-        combine(_sortOrder, _selectedFolderId, _selectedTag) { sortOrder, folderId, tag ->
-            Triple(sortOrder, folderId, tag)
+    // Reactive snippet list
+    private val allSnippets: StateFlow<List<Snippet>> = snippetRepository.getAll()
+        .catch { emit(emptyList()) }
+        .stateIn(scope, SharingStarted.WhileSubscribed(Timing.FLOW_STOP_TIMEOUT_MS), emptyList())
+
+    // Single combined input flow for filtering
+    private val filterInputs = MutableStateFlow(FilterInputs(snippets = emptyList()))
+
+    init {
+        // Seed filter inputs from the snippet repository
+        scope.launch {
+            allSnippets.collect { filterInputs.value = filterInputs.value.copy(snippets = it) }
         }
-    ) { (snippets, query, favoritesOnly), (sortOrder, folderId, tag) ->
-        var filtered = snippets.filter { snippet ->
-            val matchesQuery = query.isBlank() ||
-                snippet.title.contains(query, ignoreCase = true) ||
-                snippet.content.contains(query, ignoreCase = true) ||
-                snippet.tags.any { it.contains(query, ignoreCase = true) } ||
-                (snippet.language?.contains(query, ignoreCase = true) == true)
-
-            val matchesFavorite = !favoritesOnly || snippet.isFavorite
-            val matchesFolder = folderId == null || snippet.folderId == folderId
-            val matchesTag = tag == null || snippet.tags.any { it.equals(tag, ignoreCase = true) }
-
-            matchesQuery && matchesFavorite && matchesFolder && matchesTag
+        scope.launch {
+            delay(Timing.INITIAL_SYNC_DELAY_MS)
+            syncEngine.sync()
         }
+    }
 
-        filtered = when (sortOrder) {
-            SortOrder.MODIFIED_DESC -> filtered.sortedByDescending { it.modifiedAt }
-            SortOrder.CREATED_DESC -> filtered.sortedByDescending { it.createdAt }
-            SortOrder.TITLE_ASC -> filtered.sortedBy { it.title.lowercase() }
-            SortOrder.MOST_USED -> filtered.sortedByDescending { it.isFavorite }
-        }
+    val filteredSnippets: StateFlow<List<Snippet>> = filterInputs
+        .map { applyFilters(it) }
+        .stateIn(scope, SharingStarted.WhileSubscribed(Timing.FLOW_STOP_TIMEOUT_MS), emptyList())
 
-        filtered
-    }.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val searchQuery: StateFlow<String> = filterInputs
+        .map { it.query }
+        .stateIn(scope, SharingStarted.Eagerly, "")
 
-    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
-    val showFavoritesOnly: StateFlow<Boolean> = _showFavoritesOnly.asStateFlow()
-    val sortOrder: StateFlow<SortOrder> = _sortOrder.asStateFlow()
-    val selectedFolderId: StateFlow<String?> = _selectedFolderId.asStateFlow()
-    val selectedTag: StateFlow<String?> = _selectedTag.asStateFlow()
+    val showFavoritesOnly: StateFlow<Boolean> = filterInputs
+        .map { it.favoritesOnly }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+
+    val sortOrder: StateFlow<SortOrder> = filterInputs
+        .map { it.sortOrder }
+        .stateIn(scope, SharingStarted.Eagerly, SortOrder.MODIFIED_DESC)
+
+    val selectedFolderId: StateFlow<String?> = filterInputs
+        .map { it.folderId }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val selectedTag: StateFlow<String?> = filterInputs
+        .map { it.tag }
+        .stateIn(scope, SharingStarted.Eagerly, null)
 
     private val _snackbarData = MutableStateFlow<SnackbarData?>(null)
     val snackbarData: StateFlow<SnackbarData?> = _snackbarData.asStateFlow()
-
-    private val _folders = MutableStateFlow<List<Folder>>(emptyList())
-    val folders: StateFlow<List<Folder>> = _folders.asStateFlow()
 
     private val _createState = MutableStateFlow<CreateSnippetState>(CreateSnippetState.Idle)
     val createState: StateFlow<CreateSnippetState> = _createState.asStateFlow()
@@ -100,50 +115,51 @@ class SnippetListViewModel(
     val syncState = syncEngine.state
     val syncLogs = syncEngine.logs
 
-    init {
-        loadFolders()
-        initialSync()
-    }
+    private fun applyFilters(input: FilterInputs): List<Snippet> {
+        val filtered = input.snippets.filter { snippet ->
+            val matchesQuery = input.query.isBlank() ||
+                snippet.title.contains(input.query, ignoreCase = true) ||
+                snippet.content.contains(input.query, ignoreCase = true) ||
+                snippet.tags.any { it.contains(input.query, ignoreCase = true) } ||
+                (snippet.language?.contains(input.query, ignoreCase = true) == true)
 
-    private fun loadFolders() {
-        scope.launch {
-            folderRepository.getAll()
-                .catch { emit(emptyList()) }
-                .collect { folders ->
-                    _folders.value = folders
-                }
+            val matchesFavorite = !input.favoritesOnly || snippet.isFavorite
+            val matchesFolder = input.folderId == null || snippet.folderId == input.folderId
+            val matchesTag = input.tag == null || snippet.tags.any { it.equals(input.tag, ignoreCase = true) }
+
+            matchesQuery && matchesFavorite && matchesFolder && matchesTag
         }
-    }
 
-    private fun initialSync() {
-        scope.launch {
-            delay(1000)
-            triggerSync()
+        return when (input.sortOrder) {
+            SortOrder.MODIFIED_DESC -> filtered.sortedByDescending { it.modifiedAt }
+            SortOrder.CREATED_DESC -> filtered.sortedByDescending { it.createdAt }
+            SortOrder.TITLE_ASC -> filtered.sortedBy { it.title.lowercase() }
+            SortOrder.MOST_USED -> filtered.sortedByDescending { it.isFavorite }
         }
     }
 
     fun onSearchQueryChange(query: String) {
-        _searchQuery.value = query
+        filterInputs.value = filterInputs.value.copy(query = query)
     }
 
     fun clearSearch() {
-        _searchQuery.value = ""
+        filterInputs.value = filterInputs.value.copy(query = "")
     }
 
     fun toggleShowFavorites() {
-        _showFavoritesOnly.value = !_showFavoritesOnly.value
+        filterInputs.value = filterInputs.value.copy(favoritesOnly = !filterInputs.value.favoritesOnly)
     }
 
     fun setSortOrder(order: SortOrder) {
-        _sortOrder.value = order
+        filterInputs.value = filterInputs.value.copy(sortOrder = order)
     }
 
     fun selectFolder(folderId: String?) {
-        _selectedFolderId.value = folderId
+        filterInputs.value = filterInputs.value.copy(folderId = folderId)
     }
 
     fun selectTag(tag: String?) {
-        _selectedTag.value = tag
+        filterInputs.value = filterInputs.value.copy(tag = tag)
     }
 
     fun createFolder(name: String, parentId: String? = null, callback: (String) -> Unit = {}) {
@@ -185,8 +201,8 @@ class SnippetListViewModel(
             val result = folderRepository.delete(folderId, moveChildrenToParent = true)
             if (result.isSuccess) {
                 showSnackbar(SnackbarData("Folder deleted"))
-                if (_selectedFolderId.value == folderId) {
-                    _selectedFolderId.value = null
+                if (filterInputs.value.folderId == folderId) {
+                    filterInputs.value = filterInputs.value.copy(folderId = null)
                 }
             } else {
                 showSnackbar(SnackbarData("Failed to delete folder"))
@@ -197,7 +213,7 @@ class SnippetListViewModel(
     fun createSnippet(title: String = "", content: String = "", folderId: String? = null, callback: (String) -> Unit = {}) {
         scope.launch {
             _createState.value = CreateSnippetState.Creating
-            
+
             val snippetId = UUID.randomUUID().toString()
             val snippet = Snippet(
                 id = snippetId,
@@ -212,15 +228,15 @@ class SnippetListViewModel(
                 isFavorite = false,
                 syncStatus = com.darknote.core.model.SyncStatus.NOT_SYNCED
             )
-            
+
             val result = snippetRepository.create(snippet)
             if (result.isSuccess) {
                 storageService.saveSnippetContent(snippet)
                 _createState.value = CreateSnippetState.Created
                 callback(snippetId)
-                delay(500)
+                delay(Timing.POST_CREATE_DELAY_MS)
                 _createState.value = CreateSnippetState.Idle
-                triggerSync()
+                syncEngine.sync()
             } else {
                 _createState.value = CreateSnippetState.Error("Failed to create snippet")
             }
@@ -232,7 +248,7 @@ class SnippetListViewModel(
             val updated = snippet.copy(modifiedAt = System.currentTimeMillis())
             snippetRepository.update(updated)
             storageService.saveSnippetContent(updated)
-            triggerSync()
+            syncEngine.sync()
         }
     }
 
@@ -241,7 +257,7 @@ class SnippetListViewModel(
             storageService.deleteSnippetFile(snippet.localPath)
             snippetRepository.delete(snippet.id)
             showSnackbar(SnackbarData("Snippet deleted"))
-            triggerSync()
+            syncEngine.sync()
         }
     }
 
@@ -254,32 +270,26 @@ class SnippetListViewModel(
 
     fun copyToClipboard(snippet: Snippet) {
         scope.launch {
-            try {
-                clipboardManager.copy(snippet.content, sanitize = false)
-                showSnackbar(SnackbarData("Copied to clipboard"))
-            } catch (e: Exception) {
-                showSnackbar(SnackbarData("Failed to copy"))
-            }
+            runCatching { clipboardManager.copy(snippet.content, sanitize = false) }
+                .onSuccess { showSnackbar(SnackbarData("Copied to clipboard")) }
+                .onFailure { showSnackbar(SnackbarData("Failed to copy")) }
         }
     }
 
-    fun loadSnippetWithContent(snippet: Snippet): Snippet {
-        return runBlocking {
-            val contentResult = storageService.loadSnippetContent(snippet.localPath)
-            snippet.copy(content = contentResult.getOrNull() ?: snippet.content)
-        }
+    /** Non-blocking variant — replaces previous `runBlocking` on UI thread. */
+    suspend fun loadSnippetWithContent(snippet: Snippet): Snippet {
+        val contentResult = storageService.loadSnippetContent(snippet.localPath)
+        return snippet.copy(content = contentResult.getOrNull() ?: snippet.content)
     }
 
     fun triggerSync() {
-        scope.launch {
-            syncEngine.sync()
-        }
+        scope.launch { syncEngine.sync() }
     }
 
     private fun showSnackbar(data: SnackbarData) {
         _snackbarData.value = data
         scope.launch {
-            delay(3000)
+            delay(Timing.SNACKBAR_DURATION_MS)
             _snackbarData.value = null
         }
     }

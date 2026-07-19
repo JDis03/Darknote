@@ -27,7 +27,7 @@ class ThemeViewModel(
     }
 
     private fun loadTheme() {
-        _themeMode.value = settingsManager.load().themeMode
+        _themeMode.value = settingsManager.load().themeModeEnum
         updateColorScheme()
     }
 

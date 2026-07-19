@@ -289,10 +289,6 @@ fun HomeScreen(
                         showContextMenu = false
                         onNavigateToEditor(snippet.id)
                     },
-                    onRename = {
-                        showContextMenu = false
-                        // TODO: add rename dialog
-                    },
                     onCopy = {
                         showContextMenu = false
                         viewModel.copySnippet(snippet)

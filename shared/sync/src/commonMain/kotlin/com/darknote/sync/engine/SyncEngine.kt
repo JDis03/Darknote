@@ -70,6 +70,7 @@ class SyncEngine(
             // Step 2: Acquire sync lock to prevent concurrent syncs
             if (!syncLock.tryLock()) {
                 addLog("Another sync is already in progress", SyncLogType.WARNING)
+                _state.value = SyncState.Error("Sync already in progress")
                 return@withContext Result.failure(SyncException("Sync already in progress"))
             }
             try {
