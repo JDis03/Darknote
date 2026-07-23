@@ -7,6 +7,9 @@ import com.darknote.core.clipboard.ClipboardManager
 import com.darknote.core.model.Folder
 import com.darknote.core.model.Snippet
 import com.darknote.core.model.SyncStatus
+import com.darknote.core.model.FilterState
+import com.darknote.core.model.SortOrder
+import com.darknote.core.model.applyFilters
 import com.darknote.core.repository.FolderRepository
 import com.darknote.core.repository.SnippetRepository
 import com.darknote.core.storage.FileStorageService
@@ -18,8 +21,8 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import android.util.Log
@@ -30,13 +33,6 @@ data class SnackbarData(
     val actionLabel: String? = null,
     val action: (() -> Unit)? = null
 )
-
-enum class SortOrder {
-    MODIFIED_DESC,
-    CREATED_DESC,
-    TITLE_ASC,
-    MOST_USED
-}
 
 sealed class CreateSnippetState {
     data object Idle : CreateSnippetState()
@@ -61,52 +57,49 @@ class SnippetListViewModel @Inject constructor(
     private val networkMonitor: NetworkMonitor
 ) : ViewModel() {
 
+    /** Timing constants (millis) — kept here so they are easy to tune & audit. */
+    private object Timing {
+        const val FLOW_STOP_TIMEOUT_MS = 5_000L
+        const val UNDO_RETENTION_MS = 5 * 60 * 1_000L
+        const val COPIED_HIGHLIGHT_MS = 2_000L
+    }
+
     private val _allSnippets = snippetRepository.getAll()
         .catch { emit(emptyList()) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    private val _searchQuery = MutableStateFlow("")
-    private val _showFavoritesOnly = MutableStateFlow(false)
-    private val _sortOrder = MutableStateFlow(SortOrder.MODIFIED_DESC)
-    private val _selectedFolderId = MutableStateFlow<String?>(null)
-    private val _selectedTag = MutableStateFlow<String?>(null)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(Timing.FLOW_STOP_TIMEOUT_MS), emptyList())
 
-    val filteredSnippets = combine(
-        combine(_allSnippets, _searchQuery, _showFavoritesOnly) { snippets, query, favoritesOnly ->
-            Triple(snippets, query, favoritesOnly)
-        },
-        combine(_sortOrder, _selectedFolderId, _selectedTag) { sortOrder, folderId, tag ->
-            Triple(sortOrder, folderId, tag)
+    // Single FilterState for all 6 filter inputs (shared with Desktop)
+    private val filterInputs = MutableStateFlow(FilterState())
+
+    val filteredSnippets = filterInputs
+        .map { applyFilters(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(Timing.FLOW_STOP_TIMEOUT_MS), emptyList())
+
+    init {
+        viewModelScope.launch {
+            _allSnippets.collect { filterInputs.value = filterInputs.value.copy(snippets = it) }
         }
-    ) { (snippets, query, favoritesOnly), (sortOrder, folderId, tag) ->
-        var filtered = snippets.filter { snippet ->
-            val matchesQuery = query.isBlank() ||
-                snippet.title.contains(query, ignoreCase = true) ||
-                snippet.content.contains(query, ignoreCase = true) ||
-                snippet.tags.any { it.contains(query, ignoreCase = true) } ||
-                (snippet.language?.contains(query, ignoreCase = true) == true)
+    }
 
-            val matchesFavorite = !favoritesOnly || snippet.isFavorite
-            val matchesFolder = folderId == null || snippet.folderId == folderId
-            val matchesTag = tag == null || snippet.tags.any { it.equals(tag, ignoreCase = true) }
+    val searchQuery: StateFlow<String> = filterInputs
+        .map { it.query }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
 
-            matchesQuery && matchesFavorite && matchesFolder && matchesTag
-        }
+    val showFavoritesOnly: StateFlow<Boolean> = filterInputs
+        .map { it.favoritesOnly }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-        filtered = when (sortOrder) {
-            SortOrder.MODIFIED_DESC -> filtered.sortedByDescending { it.modifiedAt }
-            SortOrder.CREATED_DESC -> filtered.sortedByDescending { it.createdAt }
-            SortOrder.TITLE_ASC -> filtered.sortedBy { it.title.lowercase() }
-            SortOrder.MOST_USED -> filtered.sortedByDescending { it.isFavorite }
-        }
+    val sortOrder: StateFlow<SortOrder> = filterInputs
+        .map { it.sortOrder }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, SortOrder.MODIFIED_DESC)
 
-        filtered
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val selectedFolderId: StateFlow<String?> = filterInputs
+        .map { it.folderId }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
-    val showFavoritesOnly: StateFlow<Boolean> = _showFavoritesOnly.asStateFlow()
-    val sortOrder: StateFlow<SortOrder> = _sortOrder.asStateFlow()
-    val selectedFolderId: StateFlow<String?> = _selectedFolderId.asStateFlow()
-    val selectedTag: StateFlow<String?> = _selectedTag.asStateFlow()
+    val selectedTag: StateFlow<String?> = filterInputs
+        .map { it.tag }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val _copiedSnippetId = MutableStateFlow<String?>(null)
     val copiedSnippetId: StateFlow<String?> = _copiedSnippetId.asStateFlow()
@@ -117,8 +110,10 @@ class SnippetListViewModel @Inject constructor(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
-    private val _folders = MutableStateFlow<List<Folder>>(emptyList())
-    val folders: StateFlow<List<Folder>> = _folders.asStateFlow()
+    private val _folders: StateFlow<List<Folder>> = folderRepository.getAll()
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(Timing.FLOW_STOP_TIMEOUT_MS), emptyList())
+    val folders: StateFlow<List<Folder>> = _folders
 
     private val _createState = MutableStateFlow<CreateSnippetState>(CreateSnippetState.Idle)
     val createState: StateFlow<CreateSnippetState> = _createState.asStateFlow()
@@ -130,17 +125,10 @@ class SnippetListViewModel @Inject constructor(
     val syncLogs: StateFlow<List<com.darknote.sync.engine.SyncLog>> = syncEngine.logs
     val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
 
-    private val recentSnippets: StateFlow<List<Snippet>> = _allSnippets
-        .combine(_selectedFolderId) { snippets, _ ->
-            snippets.sortedByDescending { it.modifiedAt }.take(5)
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
     private val deletedSnippets = mutableMapOf<String, Snippet>()
     private val deletionTimestamps = mutableMapOf<String, Long>()
-    private val DELETION_RETENTION_MS = 5 * 60 * 1000L // 5 minutes
 
     init {
-        loadFolders()
         initialSync()
     }
 
@@ -150,9 +138,7 @@ class SnippetListViewModel @Inject constructor(
                 Log.d("SnippetListViewModel", "Running initial sync...")
                 syncEngine.sync()
                 Log.d("SnippetListViewModel", "Initial sync completed")
-                // Refresh UI after pulling remote data
-                // Snippets auto-refresh via reactive Flow
-                loadFolders()
+                // Snippets and folders auto-refresh via reactive Flows
             } catch (e: Exception) {
                 Log.w("SnippetListViewModel", "Initial sync failed: ${e.message}")
             }
@@ -161,25 +147,15 @@ class SnippetListViewModel @Inject constructor(
 
 
 
-    private fun loadFolders() {
-        viewModelScope.launch {
-            folderRepository.getAll()
-                .catch { emit(emptyList()) }
-                .collect { folders ->
-                    _folders.value = folders
-                }
-        }
-    }
-
     fun onSearchQueryChange(query: String) {
-        _searchQuery.value = query
+        filterInputs.value = filterInputs.value.copy(query = query)
         if (query.isNotBlank() && query !in _recentSearches.value) {
             _recentSearches.value = (listOf(query) + _recentSearches.value).take(10)
         }
     }
 
     fun clearSearch() {
-        _searchQuery.value = ""
+        filterInputs.value = filterInputs.value.copy(query = "")
     }
 
     fun removeRecentSearch(query: String) {
@@ -187,19 +163,19 @@ class SnippetListViewModel @Inject constructor(
     }
 
     fun toggleShowFavorites() {
-        _showFavoritesOnly.value = !_showFavoritesOnly.value
+        filterInputs.value = filterInputs.value.copy(favoritesOnly = !filterInputs.value.favoritesOnly)
     }
 
     fun setSortOrder(order: SortOrder) {
-        _sortOrder.value = order
+        filterInputs.value = filterInputs.value.copy(sortOrder = order)
     }
 
     fun selectFolder(folderId: String?) {
-        _selectedFolderId.value = folderId
+        filterInputs.value = filterInputs.value.copy(folderId = folderId)
     }
 
     fun selectTag(tag: String?) {
-        _selectedTag.value = tag
+        filterInputs.value = filterInputs.value.copy(tag = tag)
     }
 
     fun copySnippet(snippet: Snippet) {
@@ -268,7 +244,7 @@ class SnippetListViewModel @Inject constructor(
     }
     
     private fun cleanupOldDeletions() {
-        val cutoff = System.currentTimeMillis() - DELETION_RETENTION_MS
+        val cutoff = System.currentTimeMillis() - Timing.UNDO_RETENTION_MS
         val iterator = deletionTimestamps.iterator()
         while (iterator.hasNext()) {
             val entry = iterator.next()
@@ -403,8 +379,7 @@ class SnippetListViewModel @Inject constructor(
         _isRefreshing.value = true
         viewModelScope.launch {
             kotlinx.coroutines.delay(800)
-            // Snippets auto-refresh via reactive Flow
-            loadFolders()
+            // Snippets and folders auto-refresh via reactive Flows
             _isRefreshing.value = false
         }
     }
@@ -459,8 +434,7 @@ class SnippetListViewModel @Inject constructor(
                 Log.d("SnippetListViewModel", "Manual sync triggered")
                 syncEngine.sync()
                 Log.d("SnippetListViewModel", "Manual sync completed")
-                // Snippets auto-refresh via reactive Flow
-                loadFolders()
+                // Snippets and folders auto-refresh via reactive Flows
                 showSnackbar(SnackbarData("Sync complete"))
             } catch (e: Exception) {
                 Log.w("SnippetListViewModel", "Manual sync failed: ${e.message}")
@@ -530,8 +504,8 @@ class SnippetListViewModel @Inject constructor(
                 }
                 
                 // Clear selection if deleted folder was selected
-                if (_selectedFolderId.value == id) {
-                    _selectedFolderId.value = null
+                if (filterInputs.value.folderId == id) {
+                    filterInputs.value = filterInputs.value.copy(folderId = null)
                 }
                 
                 // Trigger sync after delete

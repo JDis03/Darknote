@@ -27,7 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.darknote.core.model.Folder
-import com.darknote.android.SortOrder
+import com.darknote.core.model.SortOrder
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
