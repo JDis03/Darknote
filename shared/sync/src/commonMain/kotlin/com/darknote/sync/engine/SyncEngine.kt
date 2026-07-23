@@ -501,7 +501,7 @@ class SyncEngine(
     }
     
     private suspend fun createSnippetFromRemote(remoteFile: RemoteFile, fileContent: String) {
-        val parsed = parseSnippetFile(fileContent, remoteFile)
+        val parsed = parseSnippetFile(fileContent, remoteFile) ?: return
 
         // Auto-create folder if referenced and doesn't exist locally
         val localFolderId = if (parsed.folderId != null) {
@@ -554,7 +554,7 @@ class SyncEngine(
     }
 
     private suspend fun updateSnippetFromRemote(snippet: Snippet, fileContent: String, modifiedTime: Long) {
-        val parsed = parseSnippetFile(fileContent, RemoteFile("", "", modifiedTime, 0))
+        val parsed = parseSnippetFile(fileContent, RemoteFile("", "", modifiedTime, 0)) ?: return
 
         val updatedSnippet = snippet.copy(
             title = parsed.title,
@@ -570,20 +570,17 @@ class SyncEngine(
         storageService.saveSnippetContent(updatedSnippet)
     }
 
-    private fun parseSnippetFile(raw: String, fallback: RemoteFile): SnippetFileFormat {
+    private fun parseSnippetFile(raw: String, fallback: RemoteFile): SnippetFileFormat? {
         return try {
             json.decodeFromString<SnippetFileFormat>(raw)
         } catch (e: Exception) {
-            val id = fallback.path.substringBeforeLast(".").substringAfterLast("/")
-            val title = fallback.name.substringBeforeLast(".txt")
-            SnippetFileFormat(
-                id = id,
-                title = title,
-                content = raw,
-                tags = emptyList(),
-                createdAt = fallback.modifiedTime,
-                modifiedAt = fallback.modifiedTime
+            // Log loudly. Previously this silently used raw bytes as content,
+            // creating malformed snippets. Now we skip the file entirely.
+            addLog(
+                "Corrupted remote file ${fallback.path}: ${e.message}. Skipping.",
+                SyncLogType.ERROR
             )
+            null
         }
     }
 }

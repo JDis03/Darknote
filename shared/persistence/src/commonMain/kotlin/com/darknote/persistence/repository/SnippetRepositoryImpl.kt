@@ -50,13 +50,6 @@ class SnippetRepositoryImpl(
             .map { it.map { entity -> entity.toSnippet() } }
     }
 
-    override fun search(query: String): Flow<List<Snippet>> {
-        return queries.searchSnippets(query, query)
-            .asFlow()
-            .mapToList(Dispatchers.Default)
-            .map { it.map { entity -> entity.toSnippet() } }
-    }
-
     override suspend fun create(snippet: Snippet): Result<Unit> {
         return try {
             withContext(Dispatchers.Default) {
@@ -131,9 +124,8 @@ class SnippetRepositoryImpl(
                     usage_count = metadata.usageCount.toLong(),
                     last_copied_at = metadata.lastCopiedAt,
                     dropbox_rev = metadata.dropboxRev,
-                    local_hash = metadata.localHash,
                     last_sync_at = metadata.lastSyncAt,
-                    conflict_status = metadata.conflictStatus?.name
+                    sync_status = metadata.syncStatus.name.lowercase()
                 )
             }
             Result.success(Unit)
@@ -177,11 +169,11 @@ class SnippetRepositoryImpl(
             usageCount = usage_count?.toInt() ?: 0,
             lastCopiedAt = last_copied_at,
             dropboxRev = dropbox_rev,
-            localHash = local_hash,
             lastSyncAt = last_sync_at,
-            conflictStatus = conflict_status?.let { 
-                com.darknote.core.model.ConflictStatus.valueOf(it) 
-            }
+            syncStatus = sync_status?.let {
+                runCatching { com.darknote.core.model.SyncStatus.valueOf(it.uppercase()) }
+                    .getOrDefault(com.darknote.core.model.SyncStatus.NOT_SYNCED)
+            } ?: com.darknote.core.model.SyncStatus.NOT_SYNCED
         )
     }
     

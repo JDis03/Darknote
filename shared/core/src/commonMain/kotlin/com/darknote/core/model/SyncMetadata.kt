@@ -8,6 +8,5 @@ data class SyncMetadata(
     val snippetId: String,
     val remoteRevision: String? = null,
     val lastSyncTime: Long = 0L,
-    val syncStatus: SyncStatus = SyncStatus.NOT_SYNCED,
-    val conflictInfo: String? = null
+    val syncStatus: SyncStatus = SyncStatus.NOT_SYNCED
 )

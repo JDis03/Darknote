@@ -12,13 +12,6 @@ data class SnippetMetadata(
     val usageCount: Int = 0,           // For "most used" feature
     val lastCopiedAt: Long? = null,    // Last time copied to clipboard
     val dropboxRev: String? = null,    // Dropbox revision for sync
-    val localHash: String,             // Content hash for change detection
     val lastSyncAt: Long? = null,
-    val conflictStatus: ConflictStatus? = null
+    val syncStatus: SyncStatus = SyncStatus.NOT_SYNCED
 )
-
-enum class ConflictStatus {
-    LOCAL_WINS,
-    REMOTE_WINS,
-    MERGE_NEEDED
-}

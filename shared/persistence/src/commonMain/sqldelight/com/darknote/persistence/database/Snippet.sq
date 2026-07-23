@@ -32,18 +32,9 @@ CREATE TABLE IF NOT EXISTS snippet_metadata (
     usage_count INTEGER DEFAULT 0,
     last_copied_at INTEGER,
     dropbox_rev TEXT,
-    local_hash TEXT NOT NULL,
     last_sync_at INTEGER,
-    conflict_status TEXT,
+    sync_status TEXT,
     FOREIGN KEY (snippet_id) REFERENCES snippet(id) ON DELETE CASCADE
-);
-
--- Tag table for cross-folder categorization
-CREATE TABLE IF NOT EXISTS tag (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE,
-    color TEXT,
-    created_at INTEGER NOT NULL
 );
 
 -- Tombstone table: tracks locally-deleted snippets until remote deletion is confirmed.
@@ -53,19 +44,6 @@ CREATE TABLE IF NOT EXISTS deleted_snippet (
     id TEXT PRIMARY KEY,
     deleted_at INTEGER NOT NULL -- epoch ms of local deletion
 );
-
--- User settings
-CREATE TABLE IF NOT EXISTS clipboard_settings (
-    id INTEGER PRIMARY KEY CHECK (id = 1), -- Singleton
-    auto_sanitize INTEGER AS Boolean DEFAULT 1,
-    remove_html INTEGER AS Boolean DEFAULT 1,
-    normalize_newlines INTEGER AS Boolean DEFAULT 1,
-    trim_whitespace INTEGER AS Boolean DEFAULT 1,
-    remove_zero_width INTEGER AS Boolean DEFAULT 1
-);
-
--- Insert default settings
-INSERT OR IGNORE INTO clipboard_settings (id) VALUES (1);
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_snippet_folder ON snippet(folder_id);
@@ -142,36 +120,15 @@ selectMetadataBySnippetId:
 SELECT * FROM snippet_metadata
 WHERE snippet_id = ?;
 
--- Upsert usando REPLACE (más compatible)
+-- Upsert metadata. single source of truth for sync_status.
 insertOrReplaceMetadata:
-REPLACE INTO snippet_metadata (snippet_id, usage_count, last_copied_at, dropbox_rev, local_hash, last_sync_at, conflict_status)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+REPLACE INTO snippet_metadata (snippet_id, usage_count, last_copied_at, dropbox_rev, last_sync_at, sync_status)
+VALUES (?, ?, ?, ?, ?, ?);
 
 incrementUsageCount:
 UPDATE snippet_metadata
 SET usage_count = usage_count + 1, last_copied_at = ?
 WHERE snippet_id = ?;
-
--- Search
-searchSnippets:
-SELECT * FROM snippet
-WHERE title LIKE '%' || ? || '%'
-   OR tags LIKE '%' || ? || '%'
-ORDER BY modified_at DESC;
-
--- Settings queries
-selectSettings:
-SELECT * FROM clipboard_settings
-WHERE id = 1;
-
-updateSettings:
-UPDATE clipboard_settings
-SET auto_sanitize = ?,
-    remove_html = ?,
-    normalize_newlines = ?,
-    trim_whitespace = ?,
-    remove_zero_width = ?
-WHERE id = 1;
 
 -- Sync metadata queries
 selectAllSnippetMetadata:

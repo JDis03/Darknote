@@ -11,48 +11,6 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.darknote.core.model.Folder
-import com.darknote.core.model.Snippet
-
-@Composable
-fun RenameSnippetDialog(
-    snippet: Snippet,
-    onRename: (id: String, newTitle: String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var newTitle by remember {
-        mutableStateOf(TextFieldValue(
-            text = snippet.title,
-            selection = TextRange(snippet.title.length) // cursor at end, not start
-        ))
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Rename Snippet") },
-        text = {
-            OutlinedTextField(
-                value = newTitle,
-                onValueChange = { newTitle = it },
-                label = { Text("Snippet title") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { if (newTitle.text.isNotBlank() && newTitle.text != snippet.title) onRename(snippet.id, newTitle.text) },
-                enabled = newTitle.text.isNotBlank() && newTitle.text != snippet.title
-            ) { 
-                Text("Rename") 
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { 
-                Text("Cancel") 
-            }
-        }
-    )
-}
 
 @Composable
 fun CreateFolderDialog(

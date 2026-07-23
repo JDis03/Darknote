@@ -54,7 +54,7 @@ sqldelight {
         create("DarkNoteDatabase") {
             packageName.set("com.darknote.persistence.database")
             srcDirs.setFrom("src/commonMain/sqldelight")
-            version = 2
+            version = 3
         }
     }
 }

@@ -1,0 +1,26 @@
+-- Migration 2 -> 3
+-- Drop the unused `tag` table and the unused `clipboard_settings` table.
+-- Also remove unused columns from `snippet_metadata`.
+--
+-- History:
+-- - `tag` table was created but never queried (no TagRepositoryImpl, no UI).
+-- - `local_hash` was always written as empty string "" (placeholder).
+-- - `conflict_status` column was repurposed to store SyncStatus strings, but
+--   the same value is also stored in `snippet.sync_status` — two sources of truth.
+--   We collapse to a single column.
+-- - `clipboard_settings` table was created and queries were defined, but
+--   the values are never read from DB — every code path uses the DEFAULT
+--   constant. Drop the table since it can never hold user-customized values.
+--
+-- Safe because all v2 columns/tables are droppable: tag and clipboard_settings
+-- tables are empty, local_hash always "", conflict_status values are compatible
+-- with SyncStatus strings.
+
+-- Drop unused tables
+DROP TABLE IF EXISTS tag;
+DROP TABLE IF EXISTS clipboard_settings;
+
+-- SQLite ALTER TABLE supports DROP COLUMN since 3.35.0 (Android API 30+, all modern desktops).
+ALTER TABLE snippet_metadata DROP COLUMN local_hash;
+ALTER TABLE snippet_metadata DROP COLUMN conflict_status;
+ALTER TABLE snippet_metadata ADD COLUMN sync_status TEXT;

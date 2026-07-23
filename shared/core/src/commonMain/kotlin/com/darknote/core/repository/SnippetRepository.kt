@@ -30,11 +30,6 @@ interface SnippetRepository {
     fun getFavorites(): Flow<List<Snippet>>
 
     /**
-     * Search snippets by query.
-     */
-    fun search(query: String): Flow<List<Snippet>>
-
-    /**
      * Create new snippet.
      */
     suspend fun create(snippet: Snippet): Result<Unit>
