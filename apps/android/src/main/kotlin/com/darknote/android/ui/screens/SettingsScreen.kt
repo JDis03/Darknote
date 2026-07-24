@@ -1,5 +1,8 @@
 package com.darknote.android.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,6 +13,8 @@ import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.SaveAlt
+import androidx.compose.material.icons.filled.RestorePage
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.*
@@ -24,11 +29,18 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.darknote.android.SnippetListViewModel
 import com.darknote.android.viewmodel.AuthState
 import com.darknote.android.viewmodel.AuthViewModel
+import com.darknote.android.viewmodel.BackupState
+import com.darknote.android.viewmodel.BackupViewModel
 import com.darknote.android.viewmodel.LogType
 import com.darknote.sync.engine.SyncLogType as EngineLogType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.Date
@@ -46,7 +58,8 @@ fun SettingsScreen(
     authViewModel: AuthViewModel,
     snippetViewModel: SnippetListViewModel,
     onBackClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    backupViewModel: BackupViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -54,7 +67,35 @@ fun SettingsScreen(
     val authUrl by authViewModel.authUrl.collectAsState()
     val authLogs by authViewModel.syncLogs.collectAsState()
     val syncLogs by snippetViewModel.syncLogs.collectAsState()
+    val backupState by backupViewModel.backupState.collectAsState()
     val listState = rememberLazyListState()
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            backupViewModel.exportBackup { json ->
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
+                        ?: throw IllegalStateException("Could not open file for writing")
+                }
+            }
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            backupViewModel.importBackup {
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.use { stream ->
+                        BufferedReader(InputStreamReader(stream)).readText()
+                    } ?: throw IllegalStateException("Could not open file for reading")
+                }
+            }
+        }
+    }
 
     val unifiedLogs = remember(authLogs, syncLogs) {
         (authLogs.map { log ->
@@ -302,6 +343,70 @@ fun SettingsScreen(
                 }
             }
 
+            // Backup & Restore Section — independent of Dropbox, gives the
+            // user a file they fully control (works even fully offline).
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Backup & Restore",
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                    Text(
+                        text = "Save all your folders and snippets to a single file you control, " +
+                            "independent of Dropbox. The same file can be restored on the Desktop app.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    val isBusy = backupState is BackupState.Exporting || backupState is BackupState.Importing
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                val filename = "darknote-backup-${
+                                    SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(Date())
+                                }.json"
+                                exportLauncher.launch(filename)
+                            },
+                            enabled = !isBusy,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.SaveAlt, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Export Backup")
+                        }
+
+                        OutlinedButton(
+                            onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) },
+                            enabled = !isBusy,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.RestorePage, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Restore Backup")
+                        }
+                    }
+
+                    if (isBusy) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                if (backupState is BackupState.Exporting) "Exporting..." else "Restoring...",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
+            }
+
             // Sync Debug Console
             Card(
                 modifier = Modifier
@@ -378,6 +483,57 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+    // Backup result dialog
+    when (val state = backupState) {
+        is BackupState.ExportSuccess -> {
+            AlertDialog(
+                onDismissRequest = { backupViewModel.dismiss() },
+                title = { Text("Backup saved") },
+                text = { Text("Your folders and snippets were exported successfully.") },
+                confirmButton = {
+                    TextButton(onClick = { backupViewModel.dismiss() }) { Text("OK") }
+                }
+            )
+        }
+        is BackupState.ImportSuccess -> {
+            val s = state.summary
+            AlertDialog(
+                onDismissRequest = { backupViewModel.dismiss() },
+                title = { Text("Backup restored") },
+                text = {
+                    Column {
+                        Text("Folders: ${s.foldersImported} added, ${s.foldersUpdated} updated")
+                        Text("Snippets: ${s.snippetsImported} added, ${s.snippetsUpdated} updated")
+                        if (s.errors.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "${s.errors.size} item(s) skipped:",
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            s.errors.forEach { err ->
+                                Text("• $err", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { backupViewModel.dismiss() }) { Text("OK") }
+                }
+            )
+        }
+        is BackupState.Error -> {
+            AlertDialog(
+                onDismissRequest = { backupViewModel.dismiss() },
+                title = { Text("Backup failed") },
+                text = { Text(state.message) },
+                confirmButton = {
+                    TextButton(onClick = { backupViewModel.dismiss() }) { Text("OK") }
+                }
+            )
+        }
+        else -> {}
     }
 }
 

@@ -29,6 +29,7 @@ import com.darknote.desktop.ui.components.FolderSidebar
 import com.darknote.desktop.ui.components.RenameFolderDialog
 import com.darknote.desktop.ui.components.SettingsDialog
 import com.darknote.desktop.viewmodel.AuthViewModel
+import com.darknote.desktop.viewmodel.BackupViewModel
 import com.darknote.desktop.viewmodel.SnippetListViewModel
 import com.darknote.desktop.viewmodel.ThemeViewModel
 import org.koin.compose.koinInject
@@ -64,6 +65,9 @@ fun SnippetListScreen(
     val authViewModel: AuthViewModel = koinInject()
     val authState by authViewModel.authState.collectAsState()
     val authUrl by authViewModel.authUrl.collectAsState()
+
+    val backupViewModel: BackupViewModel = koinInject()
+    val backupState by backupViewModel.backupState.collectAsState()
 
     // Register keyboard shortcuts
     DisposableEffect(Unit) {
@@ -259,6 +263,10 @@ fun SnippetListScreen(
             onConnectDropbox = { authViewModel.startAuth() },
             onCompleteAuth = { code -> authViewModel.completeAuth(code) },
             onDisconnectDropbox = { authViewModel.logout() },
+            backupState = backupState,
+            onExportBackup = { backupViewModel.exportBackup() },
+            onImportBackup = { backupViewModel.importBackup() },
+            onDismissBackupResult = { backupViewModel.dismiss() },
             onDismiss = { showSettingsDialog = false }
         )
     }

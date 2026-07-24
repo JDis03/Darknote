@@ -1,5 +1,6 @@
 package com.darknote.desktop.di
 
+import com.darknote.core.backup.BackupService
 import com.darknote.core.clipboard.ClipboardManager
 import com.darknote.core.repository.DeletedSnippetRepository
 import com.darknote.core.repository.FolderRepository
@@ -11,6 +12,7 @@ import com.darknote.desktop.platform.DesktopFileStorageFactory
 import com.darknote.desktop.settings.SettingsManager
 import com.darknote.desktop.shortcut.ShortcutRegistry
 import com.darknote.desktop.viewmodel.AuthViewModel
+import com.darknote.desktop.viewmodel.BackupViewModel
 import com.darknote.desktop.viewmodel.SnippetListViewModel
 import com.darknote.desktop.viewmodel.ThemeViewModel
 import com.darknote.persistence.DatabaseDriverFactory
@@ -60,10 +62,14 @@ val desktopModule = module {
     // Settings
     single { SettingsManager() }
 
+    // Backup/Restore (portable JSON format, shared with Android)
+    single { BackupService(get(), get(), get()) }
+
     // ViewModels
     singleOf(::SnippetListViewModel)
     single { ThemeViewModel(get()) }
     single { AuthViewModel(get()) }
+    single { BackupViewModel(get()) }
 }
 
 fun initKoin(): List<Module> {

@@ -9,6 +9,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.RestorePage
+import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,9 +22,10 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.darknote.desktop.settings.ThemeMode
 import com.darknote.desktop.viewmodel.AuthState
+import com.darknote.desktop.viewmodel.BackupState
 
 /**
- * Settings dialog for app preferences: theme + Dropbox connection.
+ * Settings dialog for app preferences: theme + Dropbox connection + backup.
  */
 @Composable
 fun SettingsDialog(
@@ -33,6 +36,10 @@ fun SettingsDialog(
     onConnectDropbox: () -> Unit,
     onCompleteAuth: (String) -> Unit,
     onDisconnectDropbox: () -> Unit,
+    backupState: BackupState,
+    onExportBackup: () -> Unit,
+    onImportBackup: () -> Unit,
+    onDismissBackupResult: () -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -77,6 +84,16 @@ fun SettingsDialog(
                     onCompleteAuth = onCompleteAuth,
                     onDisconnect = onDisconnectDropbox
                 )
+
+                HorizontalDivider()
+
+                Text("Backup & Restore", style = MaterialTheme.typography.titleSmall)
+
+                BackupSection(
+                    backupState = backupState,
+                    onExport = onExportBackup,
+                    onImport = onImportBackup
+                )
             }
         },
         confirmButton = {
@@ -85,6 +102,88 @@ fun SettingsDialog(
             }
         }
     )
+
+    // Backup result dialog (separate from the Settings dialog so it's visible on top of it)
+    when (backupState) {
+        is BackupState.ExportSuccess -> {
+            AlertDialog(
+                onDismissRequest = onDismissBackupResult,
+                title = { Text("Backup saved") },
+                text = { Text("Your folders and snippets were exported successfully.") },
+                confirmButton = { TextButton(onClick = onDismissBackupResult) { Text("OK") } }
+            )
+        }
+        is BackupState.ImportSuccess -> {
+            val s = backupState.summary
+            AlertDialog(
+                onDismissRequest = onDismissBackupResult,
+                title = { Text("Backup restored") },
+                text = {
+                    Column {
+                        Text("Folders: ${s.foldersImported} added, ${s.foldersUpdated} updated")
+                        Text("Snippets: ${s.snippetsImported} added, ${s.snippetsUpdated} updated")
+                        if (s.errors.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text("${s.errors.size} item(s) skipped:", color = MaterialTheme.colorScheme.error)
+                            s.errors.forEach { err ->
+                                Text("• $err", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = onDismissBackupResult) { Text("OK") } }
+            )
+        }
+        is BackupState.Error -> {
+            AlertDialog(
+                onDismissRequest = onDismissBackupResult,
+                title = { Text("Backup failed") },
+                text = { Text(backupState.message) },
+                confirmButton = { TextButton(onClick = onDismissBackupResult) { Text("OK") } }
+            )
+        }
+        else -> {}
+    }
+}
+
+@Composable
+private fun BackupSection(
+    backupState: BackupState,
+    onExport: () -> Unit,
+    onImport: () -> Unit
+) = Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Text(
+        "Save all your folders and snippets to a single file you control, independent of " +
+            "Dropbox. The same file can be restored on the Android app.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+
+    val isBusy = backupState is BackupState.Exporting || backupState is BackupState.Importing
+
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = onExport, enabled = !isBusy) {
+            Icon(Icons.Default.SaveAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Export Backup")
+        }
+        OutlinedButton(onClick = onImport, enabled = !isBusy) {
+            Icon(Icons.Default.RestorePage, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Restore Backup")
+        }
+    }
+
+    if (isBusy) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                if (backupState is BackupState.Exporting) "Exporting..." else "Restoring...",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+    }
 }
 
 @Composable
