@@ -28,6 +28,7 @@ import com.darknote.desktop.ui.components.DeleteFolderDialog
 import com.darknote.desktop.ui.components.FolderSidebar
 import com.darknote.desktop.ui.components.RenameFolderDialog
 import com.darknote.desktop.ui.components.SettingsDialog
+import com.darknote.desktop.viewmodel.AuthViewModel
 import com.darknote.desktop.viewmodel.SnippetListViewModel
 import com.darknote.desktop.viewmodel.ThemeViewModel
 import org.koin.compose.koinInject
@@ -60,6 +61,10 @@ fun SnippetListScreen(
     val themeViewModel: ThemeViewModel = koinInject()
     val currentThemeMode by themeViewModel.themeMode.collectAsState()
 
+    val authViewModel: AuthViewModel = koinInject()
+    val authState by authViewModel.authState.collectAsState()
+    val authUrl by authViewModel.authUrl.collectAsState()
+
     // Register keyboard shortcuts
     DisposableEffect(Unit) {
         val unregisters = listOf(
@@ -86,7 +91,7 @@ fun SnippetListScreen(
             TopAppBar(
                 title = { Text("DarkNote") },
                 actions = {
-                    // Sync status
+                    // Sync status — clicking an error opens Settings so the user can connect Dropbox
                     when (syncState) {
                         is com.darknote.sync.engine.SyncState.Syncing -> {
                             CircularProgressIndicator(
@@ -95,7 +100,13 @@ fun SnippetListScreen(
                             )
                         }
                         is com.darknote.sync.engine.SyncState.Error -> {
-                            Icon(Icons.Default.SyncProblem, "Sync Error", tint = MaterialTheme.colorScheme.error)
+                            IconButton(onClick = { showSettingsDialog = true }) {
+                                Icon(
+                                    Icons.Default.SyncProblem,
+                                    "Sync error — click to open Dropbox settings",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                         is com.darknote.sync.engine.SyncState.Synced -> {
                             Icon(Icons.Default.CloudDone, "Synced", tint = MaterialTheme.colorScheme.primary)
@@ -243,6 +254,11 @@ fun SnippetListScreen(
             onThemeModeChange = { mode ->
                 themeViewModel.setThemeMode(mode)
             },
+            authState = authState,
+            authUrl = authUrl,
+            onConnectDropbox = { authViewModel.startAuth() },
+            onCompleteAuth = { code -> authViewModel.completeAuth(code) },
+            onDisconnectDropbox = { authViewModel.logout() },
             onDismiss = { showSettingsDialog = false }
         )
     }

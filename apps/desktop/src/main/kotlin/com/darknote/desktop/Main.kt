@@ -18,7 +18,6 @@ import com.darknote.core.model.Snippet
 import com.darknote.desktop.di.desktopModule
 import com.darknote.desktop.di.initKoin
 import com.darknote.desktop.platform.KDEIntegration
-import com.darknote.desktop.ui.screens.AdvancedEditorScreen
 import com.darknote.desktop.shortcut.ShortcutRegistry
 import com.darknote.desktop.ui.screens.AdvancedEditorScreen
 import com.darknote.desktop.ui.screens.SnippetListScreen

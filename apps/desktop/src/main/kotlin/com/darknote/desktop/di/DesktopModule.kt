@@ -10,6 +10,7 @@ import com.darknote.desktop.platform.DesktopClipboardManager
 import com.darknote.desktop.platform.DesktopFileStorageFactory
 import com.darknote.desktop.settings.SettingsManager
 import com.darknote.desktop.shortcut.ShortcutRegistry
+import com.darknote.desktop.viewmodel.AuthViewModel
 import com.darknote.desktop.viewmodel.SnippetListViewModel
 import com.darknote.desktop.viewmodel.ThemeViewModel
 import com.darknote.persistence.DatabaseDriverFactory
@@ -62,6 +63,7 @@ val desktopModule = module {
     // ViewModels
     singleOf(::SnippetListViewModel)
     single { ThemeViewModel(get()) }
+    single { AuthViewModel(get()) }
 }
 
 fun initKoin(): List<Module> {
