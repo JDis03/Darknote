@@ -1,26 +1,45 @@
 -- Migration 2 -> 3
 -- Drop the unused `tag` table and the unused `clipboard_settings` table.
--- Also remove unused columns from `snippet_metadata`.
+-- Also collapse `snippet_metadata`'s `local_hash` + `conflict_status` columns
+-- into a single `sync_status` column.
 --
 -- History:
 -- - `tag` table was created but never queried (no TagRepositoryImpl, no UI).
--- - `local_hash` was always written as empty string "" (placeholder).
+-- - `local_hash` was always written as empty string "" (placeholder, unused).
 -- - `conflict_status` column was repurposed to store SyncStatus strings, but
---   the same value is also stored in `snippet.sync_status` — two sources of truth.
---   We collapse to a single column.
--- - `clipboard_settings` table was created and queries were defined, but
---   the values are never read from DB — every code path uses the DEFAULT
+--   the same value is also stored in `snippet.sync_status` — two sources of
+--   truth. We collapse to a single column named `sync_status`.
+-- - `clipboard_settings` table was created and queries were defined, but the
+--   values are never read from DB — every code path uses the DEFAULT
 --   constant. Drop the table since it can never hold user-customized values.
 --
--- Safe because all v2 columns/tables are droppable: tag and clipboard_settings
--- tables are empty, local_hash always "", conflict_status values are compatible
--- with SyncStatus strings.
+-- IMPORTANT: This does NOT use `ALTER TABLE ... DROP COLUMN` (requires SQLite
+-- 3.35+, unavailable on some Android devices with minSdk 24). Instead it uses
+-- the standard SQLite-recommended "12-step" safe table migration, which works
+-- on every SQLite version: create new table -> copy data -> drop old ->
+-- rename new. No user data (snippets, folders) is touched by this migration —
+-- only the metadata bookkeeping table.
 
--- Drop unused tables
+-- Drop unused, always-empty tables. Safe: no data loss possible.
 DROP TABLE IF EXISTS tag;
 DROP TABLE IF EXISTS clipboard_settings;
 
--- SQLite ALTER TABLE supports DROP COLUMN since 3.35.0 (Android API 30+, all modern desktops).
-ALTER TABLE snippet_metadata DROP COLUMN local_hash;
-ALTER TABLE snippet_metadata DROP COLUMN conflict_status;
-ALTER TABLE snippet_metadata ADD COLUMN sync_status TEXT;
+-- Rebuild snippet_metadata without local_hash/conflict_status, with sync_status.
+CREATE TABLE snippet_metadata_new (
+    snippet_id TEXT PRIMARY KEY,
+    usage_count INTEGER DEFAULT 0,
+    last_copied_at INTEGER,
+    dropbox_rev TEXT,
+    last_sync_at INTEGER,
+    sync_status TEXT,
+    FOREIGN KEY (snippet_id) REFERENCES snippet(id) ON DELETE CASCADE
+);
+
+-- Copy existing rows, remapping the old conflict_status column (which stored
+-- SyncStatus string values) into the new sync_status column.
+INSERT INTO snippet_metadata_new (snippet_id, usage_count, last_copied_at, dropbox_rev, last_sync_at, sync_status)
+SELECT snippet_id, usage_count, last_copied_at, dropbox_rev, last_sync_at, conflict_status
+FROM snippet_metadata;
+
+DROP TABLE snippet_metadata;
+ALTER TABLE snippet_metadata_new RENAME TO snippet_metadata;
