@@ -148,6 +148,27 @@ val languageGrammars = mapOf(
             TokenRule(Regex("\"[^\"]*\"\\s*:"), SpanStyle(color = Color(0xFFAB47BC)))
         )
     ),
+    "markdown" to LanguageGrammar(
+        keywords = emptySet(),
+        extraRules = listOf(
+            // Headers: # / ## / ### ... at line start
+            TokenRule(Regex("(?m)^#{1,6}\\s.*$"), SpanStyle(fontWeight = FontWeight.Bold, color = Color(0xFF42A5F5))),
+            // Fenced code blocks ```...```
+            TokenRule(Regex("(?s)```.*?```"), SpanStyle(color = Color(0xFF66BB6A))),
+            // Inline code `...`
+            TokenRule(Regex("`[^`\\n]+`"), SpanStyle(color = Color(0xFF66BB6A))),
+            // Bold **text** or __text__
+            TokenRule(Regex("(\\*\\*[^*\\n]+\\*\\*)|(__[^_\\n]+__)"), SpanStyle(fontWeight = FontWeight.Bold)),
+            // Italic *text* or _text_
+            TokenRule(Regex("(?<!\\*)\\*[^*\\n]+\\*(?!\\*)|(?<!_)_[^_\\n]+_(?!_)"), SpanStyle(fontStyle = FontStyle.Italic)),
+            // List markers: -, *, + or numbered at line start
+            TokenRule(Regex("(?m)^\\s*([-*+]|\\d+\\.)\\s"), SpanStyle(fontWeight = FontWeight.Bold, color = Color(0xFFAB47BC))),
+            // Links [text](url)
+            TokenRule(Regex("\\[[^\\]\\n]*\\]\\([^)\\n]*\\)"), SpanStyle(color = Color(0xFFFFA726))),
+            // Blockquotes
+            TokenRule(Regex("(?m)^>\\s.*$"), SpanStyle(fontStyle = FontStyle.Italic, color = Color(0xFF6D6D6D)))
+        )
+    ),
     "cpp" to LanguageGrammar(
         keywords = setOf(
             "auto", "break", "case", "class", "const", "continue", "default",
@@ -206,6 +227,7 @@ object SyntaxHighlighter {
         "sh", "shell", "zsh" -> "bash"
         "yml" -> "yaml"
         "c", "cpp", "cxx", "h", "hpp" -> "cpp"
+        "md" -> "markdown"
         else -> lang.lowercase()
     }
 }

@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.darknote.android.SnippetListViewModel
+import com.darknote.android.ui.components.SyntaxHighlightTransformation
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -321,6 +322,14 @@ fun EditorScreen(
                 Spacer(Modifier.height(12.dp))
 
                 // Content field
+                // visualTransformation applies live syntax highlighting driven by
+                // snippet.language. It's a pure display-layer transform (identity
+                // offset mapping) — the raw TextFieldValue.text is never touched,
+                // so cursor position, selection, and paste all behave exactly as
+                // if there were no highlighting at all. See SyntaxHighlightTransformation.
+                val highlightTransformation = remember(snippet.language) {
+                    SyntaxHighlightTransformation(snippet.language)
+                }
                 BasicTextField(
                     value = contentField,
                     onValueChange = { contentField = it },
@@ -332,7 +341,8 @@ fun EditorScreen(
                         lineHeight = 22.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    visualTransformation = highlightTransformation
                 )
 
                 Spacer(Modifier.height(80.dp))
