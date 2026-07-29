@@ -267,7 +267,7 @@ fun CreateSnippetSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scrollState = rememberScrollState()
 
-    val languages = listOf("bash", "python", "kotlin", "sql", "javascript", "typescript", "config", "text")
+    val languages = listOf("bash", "python", "kotlin", "sql", "javascript", "typescript", "markdown", "config", "text")
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -437,7 +437,7 @@ fun EditSnippetSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scrollState = rememberScrollState()
 
-    val languages = listOf("bash", "python", "kotlin", "sql", "javascript", "typescript", "config", "text")
+    val languages = listOf("bash", "python", "kotlin", "sql", "javascript", "typescript", "markdown", "config", "text")
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
