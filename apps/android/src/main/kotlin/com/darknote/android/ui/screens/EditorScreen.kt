@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.darknote.android.SnippetListViewModel
 import com.darknote.android.ui.components.SyntaxHighlightTransformation
+import com.darknote.android.ui.components.MarkdownPreview
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -66,6 +67,7 @@ fun EditorScreen(
     var isModified  by remember { mutableStateOf(false) }
     var saveStatus  by remember { mutableStateOf(EditorSaveStatus.Idle) }
     var showMoreSheet by remember { mutableStateOf(false) }
+    var showPreview  by remember { mutableStateOf(false) }
 
     val titleFocusRequester   = remember { FocusRequester() }
     val contentFocusRequester = remember { FocusRequester() }
@@ -143,6 +145,7 @@ fun EditorScreen(
     val folderName = snippet.folderId?.let { fid -> folders.find { it.id == fid }?.name }
     val lines = contentField.text.lines().size
     val chars = contentField.text.length
+    val isMarkdown = snippet.language?.lowercase() in setOf("markdown", "md")
 
     // ── UI ────────────────────────────────────────────────────────────────────
     Scaffold(
@@ -197,6 +200,19 @@ fun EditorScreen(
                         )
                     }
                     Spacer(Modifier.width(4.dp))
+                    // Markdown preview toggle — only meaningful for markdown notes.
+                    // Preview is pure display (MarkdownParser → Compose), it never
+                    // mutates contentField, so toggling back is lossless.
+                    if (isMarkdown) {
+                        IconButton(onClick = { showPreview = !showPreview }) {
+                            Icon(
+                                if (showPreview) Icons.Default.Edit else Icons.Default.Visibility,
+                                contentDescription = if (showPreview) "Edit" else "Preview",
+                                tint = if (showPreview) MaterialTheme.colorScheme.primary
+                                       else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                     IconButton(onClick = { viewModel.copySnippet(snippet) }) {
                         Icon(Icons.Default.ContentCopy, "Copy")
                     }
@@ -321,29 +337,37 @@ fun EditorScreen(
                 )
                 Spacer(Modifier.height(12.dp))
 
-                // Content field
-                // visualTransformation applies live syntax highlighting driven by
-                // snippet.language. It's a pure display-layer transform (identity
-                // offset mapping) — the raw TextFieldValue.text is never touched,
-                // so cursor position, selection, and paste all behave exactly as
-                // if there were no highlighting at all. See SyntaxHighlightTransformation.
-                val highlightTransformation = remember(snippet.language) {
-                    SyntaxHighlightTransformation(snippet.language)
+                // Content: raw editor (with live syntax highlighting) or
+                // rendered markdown preview, depending on the toggle.
+                if (showPreview && isMarkdown) {
+                    MarkdownPreview(
+                        markdown = contentField.text,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    // visualTransformation applies live syntax highlighting driven by
+                    // snippet.language. It's a pure display-layer transform (identity
+                    // offset mapping) — the raw TextFieldValue.text is never touched,
+                    // so cursor position, selection, and paste all behave exactly as
+                    // if there were no highlighting at all. See SyntaxHighlightTransformation.
+                    val highlightTransformation = remember(snippet.language) {
+                        SyntaxHighlightTransformation(snippet.language)
+                    }
+                    BasicTextField(
+                        value = contentField,
+                        onValueChange = { contentField = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(contentFocusRequester),
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            fontFamily = FontFamily.Monospace,
+                            lineHeight = 22.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        visualTransformation = highlightTransformation
+                    )
                 }
-                BasicTextField(
-                    value = contentField,
-                    onValueChange = { contentField = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(contentFocusRequester),
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(
-                        fontFamily = FontFamily.Monospace,
-                        lineHeight = 22.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    visualTransformation = highlightTransformation
-                )
 
                 Spacer(Modifier.height(80.dp))
             }
