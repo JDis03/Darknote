@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
@@ -350,13 +351,24 @@ fun EditorScreen(
                 )
                 Spacer(Modifier.height(12.dp))
 
-                // Content: a SINGLE BasicTextField, always bound to contentField,
-                // in both modes. Only the visualTransformation differs — a pure
-                // display-layer decoration with identity offset mapping, so the
-                // raw text is never touched by switching modes. No remember()
-                // here so a stale transformation can never survive a toggle.
+                // Content: a SINGLE BasicTextField, always bound to contentField.
+                // MODE INDICATOR: coloured bar + text to confirm which transformation
+                // is active. Remove this after debugging.
                 val transformation = if (useLivePreview) MarkdownVisualTransformation()
                     else SyntaxHighlightTransformation(snippet.language)
+                val modeLabel = transformation.javaClass.simpleName
+                val modeColor = if (useLivePreview) Color(0xFF1976D2) else Color(0xFFE53935)
+                val modeBg = if (useLivePreview) Color(0x261976D2) else Color(0x26E53935)
+                Box(
+                    modifier = Modifier.fillMaxWidth().background(modeBg).padding(4.dp)
+                ) {
+                    Text(
+                        "MODE: $modeLabel  (isMarkdown=$isMarkdown showPreview=$showPreview lang=${snippet.language})",
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                        color = modeColor
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
                 BasicTextField(
                     value = contentField,
                     onValueChange = { contentField = it },
