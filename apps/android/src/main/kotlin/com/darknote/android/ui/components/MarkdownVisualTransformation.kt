@@ -47,11 +47,12 @@ object MarkdownLiveStyle {
     private val quoteColor = Color(0xFF9E9E9E)
     private val listColor = Color(0xFFAB47BC)
 
-    // Code blocks: Obsidian-style — visible grey background (~15% grey), normal
-    // text colour (not green!), monospace. Fence markers (```, language tag) are
-    // dimmed separately. Inline code gets the same treatment, just inline.
-    private val codeBackground = Color(0x26707070)
-    private val fenceColor = Color(0xFF808080)
+    // Code blocks: Obsidian-style — visible tinted background, monospace.
+    // Opacity is intentionally high (~35%) so there's zero ambiguity about
+    // whether the styling is active vs the old SyntaxHighlightTransformation
+    // (which colors the whole block green, fences included).
+    private val codeBackground = Color(0x554B6E66)
+    private val fenceColor = Color(0xFF707070)
     private val inlineCodeColor = Color(0xFFFF6B6B)
 
     private val headerSizes = mapOf(

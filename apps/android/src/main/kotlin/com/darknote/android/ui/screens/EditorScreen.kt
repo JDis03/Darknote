@@ -353,14 +353,10 @@ fun EditorScreen(
                 // Content: a SINGLE BasicTextField, always bound to contentField,
                 // in both modes. Only the visualTransformation differs — a pure
                 // display-layer decoration with identity offset mapping, so the
-                // raw text is never touched by switching modes. Eye mode uses
-                // MarkdownVisualTransformation (live markdown styling, proportional
-                // font); pencil mode (or any non-markdown note) uses the generic
-                // language-aware SyntaxHighlightTransformation with a monospace font.
-                val transformation = remember(snippet.language, useLivePreview) {
-                    if (useLivePreview) MarkdownVisualTransformation()
+                // raw text is never touched by switching modes. No remember()
+                // here so a stale transformation can never survive a toggle.
+                val transformation = if (useLivePreview) MarkdownVisualTransformation()
                     else SyntaxHighlightTransformation(snippet.language)
-                }
                 BasicTextField(
                     value = contentField,
                     onValueChange = { contentField = it },
