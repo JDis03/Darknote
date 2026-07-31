@@ -1,3 +1,9 @@
+## 2026-07-31 18:50 — DarkNote
+**Summary**: Fixed two bugs the user found after testing the WYSIWYG editor commit: (1) eye/pencil view mapping was inverted — WYSIWYG is now correctly the default view with the toolbar, raw source is the toggle target; (2) a data-mutation bug where entering WYSIWYG mode silently rewrote pasted markdown via an unguarded bidirectional sync echo, fixed with a one-shot suppression flag around setMarkdown() loads.
+**Verified**: ./gradlew :apps:android:compileDebugKotlin succeeded; full ./init.sh green, 175/175 tests passing. Committed as 25bf35e.
+**Completed**: none
+---
+---
 ## 2026-07-31 17:40 — DarkNote
 **Summary**: Implemented Android WYSIWYG markdown editor (eye mode) in EditorScreen.kt using richeditor-compose:1.0.0-rc05-k2 (version pinned for Kotlin 2.0.0 compat, not latest 1.0.0 tag). Replaced read-only MarkdownPreview with editable RichTextEditor, bidirectionally synced to contentField.text (source of truth) via setMarkdown()/toMarkdown() with trimEnd()-normalized comparison to prevent auto-save loops. Added a format toolbar (bold/italic/strikethrough/code/lists) using only README-confirmed stable RichTextState API. Deleted the now-dead MarkdownPreview.kt composable.
 **Verified**: ./gradlew :apps:android:compileDebugKotlin succeeded; full ./init.sh ran twice (before and after final comment edit), both BUILD SUCCESSFUL with 175/175 tests passing, no regressions vs session start baseline (also 175 green).
