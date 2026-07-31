@@ -78,6 +78,15 @@ fun EditorScreen(
     // LaunchedEffects below.
     val richTextState = rememberRichTextState()
 
+    // Guards the write-back sync effect against echoing the reformatting that
+    // setMarkdown()/toMarkdown() round-tripping introduces (blockquote spacing,
+    // italic marker normalization, etc.) right after WE load content into the
+    // rich editor — as opposed to the user actually typing/formatting. Without
+    // this, pasting markdown then switching into WYSIWYG mode would silently
+    // rewrite the pasted text into the library's reformatted version the
+    // instant it loaded, even though the user never touched anything.
+    var suppressNextRichTextSync by remember(snippetId) { mutableStateOf(false) }
+
     val titleFocusRequester   = remember { FocusRequester() }
     val contentFocusRequester = remember { FocusRequester() }
     val scrollState = rememberScrollState()
@@ -156,31 +165,52 @@ fun EditorScreen(
     val chars = contentField.text.length
     val isMarkdown = snippet.language?.lowercase() in setOf("markdown", "md")
 
-    // ── WYSIWYG sync (eye mode) ──────────────────────────────────────────────
-    // Entering eye mode: load the current raw markdown into the rich editor.
-    // This only fires on the showPreview transition, not on every keystroke,
-    // so it never fights the user while they're typing in eye mode.
-    LaunchedEffect(showPreview) {
-        if (showPreview && isMarkdown) {
+    // ── WYSIWYG sync ──────────────────────────────────────────────────────────
+    // The rich WYSIWYG editor (RichTextEditor) is the DEFAULT view for markdown
+    // notes (showPreview == false) — it's "the editor" the eye icon represents
+    // being in. Toggling to showPreview == true switches to the raw/pencil
+    // BasicTextField source view instead. useRichEditor below drives both the
+    // content block and these two sync effects.
+    val useRichEditor = isMarkdown && !showPreview
+
+    // Entering WYSIWYG: load the current raw markdown into the rich editor.
+    // Also re-runs once `hasInitialized` flips true, so the async snippet load
+    // (LaunchedEffect(snippetId) above) reaches the rich editor even though it
+    // completes AFTER this composable's very first frame, where contentField.text
+    // is still "".
+    LaunchedEffect(useRichEditor, hasInitialized) {
+        if (useRichEditor && hasInitialized) {
+            // Mark the NEXT annotatedString change (the one setMarkdown itself
+            // is about to cause) as a load-echo, not a real edit, so the
+            // write-back effect below skips it instead of bouncing the
+            // reformatted markdown straight back into contentField.
+            suppressNextRichTextSync = true
             richTextState.setMarkdown(contentField.text)
         }
     }
 
-    // While eye mode is active, every rich-text edit is converted back to
-    // markdown and pushed into contentField — the same field the pencil-mode
-    // BasicTextField and the auto-save effect above read from. This keeps
-    // contentField.text as the single source of truth at all times.
+    // While the WYSIWYG editor is active, every rich-text edit is converted
+    // back to markdown and pushed into contentField — the same field the
+    // pencil-mode BasicTextField and the auto-save effect above read from.
+    // This keeps contentField.text as the single source of truth at all times.
     //
     // toMarkdown() can reformat whitespace slightly differently from the
-    // input it was given (list marker spacing etc.), so we compare with
-    // trimEnd() to avoid re-triggering this effect (and the auto-save debounce)
-    // in an infinite loop over a trailing-newline-only difference.
+    // input it was given (list marker spacing, blockquote/italic normalization,
+    // etc.), so besides the trimEnd() comparison below, we skip entirely the
+    // one run right after setMarkdown() loaded content — see
+    // suppressNextRichTextSync above. Without that guard, this effect would
+    // "correct" the user's just-pasted/just-loaded text into the library's
+    // own re-rendering of it the instant WYSIWYG mode opened, before the user
+    // ever touched anything.
     LaunchedEffect(richTextState.annotatedString) {
-        if (showPreview && isMarkdown) {
-            val markdown = richTextState.toMarkdown()
-            if (markdown.trimEnd() != contentField.text.trimEnd()) {
-                contentField = TextFieldValue(text = markdown, selection = TextRange(markdown.length))
-            }
+        if (!useRichEditor) return@LaunchedEffect
+        if (suppressNextRichTextSync) {
+            suppressNextRichTextSync = false
+            return@LaunchedEffect
+        }
+        val markdown = richTextState.toMarkdown()
+        if (markdown.trimEnd() != contentField.text.trimEnd()) {
+            contentField = TextFieldValue(text = markdown, selection = TextRange(markdown.length))
         }
     }
 
@@ -352,16 +382,14 @@ fun EditorScreen(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     keyboardActions = KeyboardActions(
                         onNext = {
-                            // contentFocusRequester is only attached to the raw content
-                            // BasicTextField (see .focusRequester below). When the markdown
-                            // preview is showing, that field isn't composed at all, so the
-                            // requester has no node — calling requestFocus() on it would
-                            // throw IllegalStateException("FocusRequester is not initialized").
-                            // Guard on showPreview, and runCatching as a second safety net
-                            // for any other composition-timing edge case.
-                            if (!showPreview) {
-                                runCatching { contentFocusRequester.requestFocus() }
-                            }
+                            // contentFocusRequester is attached to whichever content
+                            // composable is currently mounted — RichTextEditor in WYSIWYG
+                            // mode, or the raw BasicTextField otherwise (see .focusRequester
+                            // on both below) — so exactly one of them always has it. Only
+                            // runCatching is needed as a safety net for composition-timing
+                            // edge cases (e.g. requestFocus() called before that frame's
+                            // node attaches).
+                            runCatching { contentFocusRequester.requestFocus() }
                         }
                     ),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -388,9 +416,10 @@ fun EditorScreen(
                 )
                 Spacer(Modifier.height(12.dp))
 
-                // Content: editable WYSIWYG markdown editor (eye mode) or raw
-                // editor with live syntax highlighting (pencil mode).
-                if (showPreview && isMarkdown) {
+                // Content: editable WYSIWYG markdown editor (default for markdown
+                // notes) or raw editor with live syntax highlighting (toggled via
+                // the eye/pencil icon, or always for non-markdown notes).
+                if (useRichEditor) {
                     FormatToolbar(richTextState)
                     Spacer(Modifier.height(4.dp))
                     RichTextEditor(
