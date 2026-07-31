@@ -9,15 +9,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/**
- * The whole point of MarkdownVisualTransformation (vs. the earlier WYSIWYG
- * library approach) is that it NEVER alters a single character of the raw
- * text — it only recolors/resizes the same string via identity offset
- * mapping. These tests pin that guarantee down for the exact real-world
- * input that surfaced the original bug (a pasted blockquote getting
- * silently reformatted), plus a battery of other markdown constructs and
- * edge cases (empty string, unmatched markers, nested/adjacent constructs).
- */
 class MarkdownVisualTransformationTest {
 
     private fun assertTextUnchanged(input: String) {
@@ -29,7 +20,7 @@ class MarkdownVisualTransformationTest {
         assertEquals(
             OffsetMapping.Identity,
             transformed.offsetMapping,
-            "Must use identity offset mapping — no characters may be added/removed/reordered"
+            "Must use identity offset mapping"
         )
     }
 
@@ -77,27 +68,46 @@ class MarkdownVisualTransformationTest {
     }
 
     @Test
-    fun `fenced python code block from user report gets monospace and visible background`() {
-        // Exact input reported: "I pasted ```python\nprint("Hola")\n``` and saw nothing".
-        // The old implementation used a nearly-invisible 12%-opacity green background
-        // and applied the same colour to fences + code content alike — indistinguishable
-        // from surrounding text. The fix splits fences (dimmed) from code content
-        // (monospace + visible ~15% grey background), matching Obsidian's treatment.
+    fun `fenced python code block gets monospace and visible background`() {
         val input = "```python\nprint(\"Hola\")\n```"
         assertTextUnchanged(input)
 
         val styled = MarkdownLiveStyle.style(input)
 
-        // Opening fence (```python\n) should be dimmed
         val openFenceStyle = styled.spanStyles.find { it.start == 0 && it.end == 10 }
         assertTrue(openFenceStyle != null, "Opening fence (0..10) must have a dimmed style applied")
 
-        // Code content should have monospace AND a visible background
         val codeContentStyle = styled.spanStyles.find { it.start == 10 }
         assertTrue(codeContentStyle != null, "Code content (starting at 10) must have monospace+background style")
         assertEquals(FontFamily.Monospace, codeContentStyle!!.item.fontFamily)
-        assertTrue(codeContentStyle.item.background != null && codeContentStyle.item.background != androidx.compose.ui.graphics.Color.Transparent,
-            "Code content must have a visible background — the old 0x1F-almost-invisible background was the bug")
+        assertTrue(
+            codeContentStyle.item.background != null &&
+                codeContentStyle.item.background != androidx.compose.ui.graphics.Color.Transparent,
+            "Code content must have a visible background"
+        )
+    }
+
+    @Test
+    fun `fenced code with Windows line endings gets styled`() {
+        val input = "```python\r\nprint(\"Hola\")\r\n```"
+        assertTextUnchanged(input)
+
+        val styled = MarkdownLiveStyle.style(input)
+        val hasMonospace = styled.spanStyles.any { range ->
+            range.item.fontFamily == FontFamily.Monospace &&
+                range.item.background != null &&
+                range.item.background != androidx.compose.ui.graphics.Color.Transparent
+        }
+        assertTrue(hasMonospace, "CRLF code block must get monospace + background styling")
+    }
+
+    @Test
+    fun `debug - valid markdown produces at least one style span`() {
+        val input = "# Hi\n\n```kotlin\nval x = 1\n```\n\nBody **bold**"
+        val styled = MarkdownLiveStyle.style(input)
+        assertTrue(styled.spanStyles.isNotEmpty(),
+            "Expected at least one style span for '# Hi', code fence, and bold text. " +
+            "Got 0 spans — regexes are not matching anything!")
     }
 
     @Test
@@ -112,8 +122,6 @@ class MarkdownVisualTransformationTest {
 
     @Test
     fun `unmatched or malformed markers do not throw and text is preserved`() {
-        // Dangling markers, empty link text/url, unbalanced asterisks etc. — none
-        // of these should throw (e.g. from an invalid/empty regex range) or alter text.
         assertTextUnchanged("* not a list marker without a following space*")
         assertTextUnchanged("[]()")
         assertTextUnchanged("**unterminated bold")

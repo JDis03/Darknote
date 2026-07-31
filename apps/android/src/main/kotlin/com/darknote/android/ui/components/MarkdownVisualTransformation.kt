@@ -47,12 +47,10 @@ object MarkdownLiveStyle {
     private val quoteColor = Color(0xFF9E9E9E)
     private val listColor = Color(0xFFAB47BC)
 
-    // Code blocks: Obsidian-style — visible tinted background, monospace.
-    // Opacity is intentionally high (~35%) so there's zero ambiguity about
-    // whether the styling is active vs the old SyntaxHighlightTransformation
-    // (which colors the whole block green, fences included).
-    private val codeBackground = Color(0x554B6E66)
-    private val fenceColor = Color(0xFF707070)
+    // Code blocks: BRIGHT RED background (DEBUG) — impossible to miss.
+    // If you see green in eye mode, MarkdownVisualTransformation is NOT active.
+    private val codeBackground = Color(0x55FF0000)
+    private val fenceColor = Color(0xFF999999)
     private val inlineCodeColor = Color(0xFFFF6B6B)
 
     private val headerSizes = mapOf(
@@ -82,7 +80,11 @@ object MarkdownLiveStyle {
             if (e > s) addStyle(style, s, e)
         }
 
-        // Headers: dim the "### " prefix, bold + scale + color the heading text.
+        // DEBUG: paint ALL text blue + 20sp to confirm the transformation is active.
+        // If you open a markdown note and ALL text is blue + large, the transformation
+        // IS being applied. If you see normal-looking text, the BasicTextField is
+        // ignoring visualTransformation entirely.
+        mark(SpanStyle(color = Color(0xFF1976D2), fontSize = 20.sp, fontWeight = FontWeight.Bold), 0, len)
         for (m in headerRule.findAll(text)) {
             val hashes = m.groupValues[1]
             val markerEnd = m.range.first + hashes.length + m.groupValues[2].length
