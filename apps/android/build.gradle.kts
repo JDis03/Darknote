@@ -60,6 +60,13 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
+    // WYSIWYG markdown editor (eye mode in EditorScreen). Version pinned to
+    // rc05-k2 — NOT the latest 1.0.0 tag, which requires Kotlin 2.4.0 /
+    // Compose 1.11.1. This project is on Kotlin 2.0.0 / compose-bom 2024.06.00
+    // (~Compose UI 1.6.10), and rc05-k2 is the version matching that pair
+    // per the library's compatibility table.
+    implementation("com.mohamedrejeb.richeditor:richeditor-compose:1.0.0-rc05-k2")
+
     // Pull-to-refresh (material)
     implementation("androidx.compose.material:material:1.6.8")
 
