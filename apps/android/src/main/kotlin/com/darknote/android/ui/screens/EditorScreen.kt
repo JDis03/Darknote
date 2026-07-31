@@ -8,6 +8,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,7 +30,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.darknote.android.SnippetListViewModel
 import com.darknote.android.ui.components.SyntaxHighlightTransformation
-import com.darknote.android.ui.components.MarkdownPreview
+import com.mohamedrejeb.richeditor.model.rememberRichTextState
+import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -68,6 +70,13 @@ fun EditorScreen(
     var saveStatus  by remember { mutableStateOf(EditorSaveStatus.Idle) }
     var showMoreSheet by remember { mutableStateOf(false) }
     var showPreview  by remember { mutableStateOf(false) }
+
+    // WYSIWYG editor state (eye mode). contentField.text remains the single
+    // source of truth (raw markdown) — richTextState is just a live view over
+    // it, loaded via setMarkdown() when entering eye mode and pushed back via
+    // toMarkdown() on every edit while eye mode is active. See the two
+    // LaunchedEffects below.
+    val richTextState = rememberRichTextState()
 
     val titleFocusRequester   = remember { FocusRequester() }
     val contentFocusRequester = remember { FocusRequester() }
@@ -147,6 +156,34 @@ fun EditorScreen(
     val chars = contentField.text.length
     val isMarkdown = snippet.language?.lowercase() in setOf("markdown", "md")
 
+    // ── WYSIWYG sync (eye mode) ──────────────────────────────────────────────
+    // Entering eye mode: load the current raw markdown into the rich editor.
+    // This only fires on the showPreview transition, not on every keystroke,
+    // so it never fights the user while they're typing in eye mode.
+    LaunchedEffect(showPreview) {
+        if (showPreview && isMarkdown) {
+            richTextState.setMarkdown(contentField.text)
+        }
+    }
+
+    // While eye mode is active, every rich-text edit is converted back to
+    // markdown and pushed into contentField — the same field the pencil-mode
+    // BasicTextField and the auto-save effect above read from. This keeps
+    // contentField.text as the single source of truth at all times.
+    //
+    // toMarkdown() can reformat whitespace slightly differently from the
+    // input it was given (list marker spacing etc.), so we compare with
+    // trimEnd() to avoid re-triggering this effect (and the auto-save debounce)
+    // in an infinite loop over a trailing-newline-only difference.
+    LaunchedEffect(richTextState.annotatedString) {
+        if (showPreview && isMarkdown) {
+            val markdown = richTextState.toMarkdown()
+            if (markdown.trimEnd() != contentField.text.trimEnd()) {
+                contentField = TextFieldValue(text = markdown, selection = TextRange(markdown.length))
+            }
+        }
+    }
+
     // ── UI ────────────────────────────────────────────────────────────────────
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -200,9 +237,12 @@ fun EditorScreen(
                         )
                     }
                     Spacer(Modifier.width(4.dp))
-                    // Markdown preview toggle — only meaningful for markdown notes.
-                    // Preview is pure display (MarkdownParser → Compose), it never
-                    // mutates contentField, so toggling back is lossless.
+                    // Eye/pencil mode toggle — only meaningful for markdown notes.
+                    // Eye mode is an editable WYSIWYG editor (RichTextEditor, backed
+                    // by richeditor-compose's markdown parser); pencil mode is the
+                    // raw BasicTextField with syntax highlighting. contentField.text
+                    // is kept as the single source of truth in both modes — see the
+                    // WYSIWYG sync LaunchedEffects above.
                     if (isMarkdown) {
                         IconButton(onClick = { showPreview = !showPreview }) {
                             Icon(
@@ -311,7 +351,18 @@ fun EditorScreen(
                     ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     keyboardActions = KeyboardActions(
-                        onNext = { contentFocusRequester.requestFocus() }
+                        onNext = {
+                            // contentFocusRequester is only attached to the raw content
+                            // BasicTextField (see .focusRequester below). When the markdown
+                            // preview is showing, that field isn't composed at all, so the
+                            // requester has no node — calling requestFocus() on it would
+                            // throw IllegalStateException("FocusRequester is not initialized").
+                            // Guard on showPreview, and runCatching as a second safety net
+                            // for any other composition-timing edge case.
+                            if (!showPreview) {
+                                runCatching { contentFocusRequester.requestFocus() }
+                            }
+                        }
                     ),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     singleLine = true,
@@ -337,12 +388,20 @@ fun EditorScreen(
                 )
                 Spacer(Modifier.height(12.dp))
 
-                // Content: raw editor (with live syntax highlighting) or
-                // rendered markdown preview, depending on the toggle.
+                // Content: editable WYSIWYG markdown editor (eye mode) or raw
+                // editor with live syntax highlighting (pencil mode).
                 if (showPreview && isMarkdown) {
-                    MarkdownPreview(
-                        markdown = contentField.text,
-                        modifier = Modifier.fillMaxWidth()
+                    FormatToolbar(richTextState)
+                    Spacer(Modifier.height(4.dp))
+                    RichTextEditor(
+                        state = richTextState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(contentFocusRequester),
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            lineHeight = 22.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                     )
                 } else {
                     // visualTransformation applies live syntax highlighting driven by
@@ -428,6 +487,78 @@ fun EditorScreen(
                 )
             }
         }
+    }
+}
+
+/**
+ * Formatting toolbar shown above the WYSIWYG editor (eye mode only).
+ * Only uses RichTextState methods documented as stable across versions:
+ * toggleSpanStyle, toggleCodeSpan, toggleOrderedList, toggleUnorderedList.
+ * Deliberately omits heading buttons — heading support is not confirmed
+ * stable on the Kotlin-2.0-compatible library version this project pins.
+ */
+@Composable
+private fun FormatToolbar(state: com.mohamedrejeb.richeditor.model.RichTextState) {
+    val currentSpanStyle = state.currentSpanStyle
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        ToolbarToggle(
+            icon = Icons.Default.FormatBold,
+            label = "Bold",
+            active = currentSpanStyle.fontWeight == FontWeight.Bold,
+            onClick = { state.toggleSpanStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)) }
+        )
+        ToolbarToggle(
+            icon = Icons.Default.FormatItalic,
+            label = "Italic",
+            active = currentSpanStyle.fontStyle == androidx.compose.ui.text.font.FontStyle.Italic,
+            onClick = { state.toggleSpanStyle(androidx.compose.ui.text.SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) }
+        )
+        ToolbarToggle(
+            icon = Icons.Default.FormatStrikethrough,
+            label = "Strikethrough",
+            active = currentSpanStyle.textDecoration == androidx.compose.ui.text.style.TextDecoration.LineThrough,
+            onClick = { state.toggleSpanStyle(androidx.compose.ui.text.SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough)) }
+        )
+        ToolbarToggle(
+            icon = Icons.Default.Code,
+            label = "Code",
+            active = state.isCodeSpan,
+            onClick = { state.toggleCodeSpan() }
+        )
+        ToolbarToggle(
+            icon = Icons.AutoMirrored.Filled.FormatListBulleted,
+            label = "Bulleted list",
+            active = state.isUnorderedList,
+            onClick = { state.toggleUnorderedList() }
+        )
+        ToolbarToggle(
+            icon = Icons.Default.FormatListNumbered,
+            label = "Numbered list",
+            active = state.isOrderedList,
+            onClick = { state.toggleOrderedList() }
+        )
+    }
+}
+
+@Composable
+private fun ToolbarToggle(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    active: Boolean,
+    onClick: () -> Unit
+) {
+    IconButton(onClick = onClick) {
+        Icon(
+            icon,
+            contentDescription = label,
+            tint = if (active) MaterialTheme.colorScheme.primary
+                   else MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

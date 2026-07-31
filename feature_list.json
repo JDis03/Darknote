@@ -10,11 +10,11 @@
     },
     {
       "id": "feat-002",
-      "name": "First User-Facing Feature",
-      "description": "Replace this placeholder with the first concrete behavior the agent should implement",
+      "name": "Android WYSIWYG Markdown Editor",
+      "description": "Replace the read-only MarkdownPreview toggle in EditorScreen.kt with an editable WYSIWYG editor (richeditor-compose RichTextEditor) in eye mode, keeping BasicTextField+SyntaxHighlightTransformation as the raw/pencil mode. contentField.text stays the single source of truth (markdown), synced bidirectionally via setMarkdown()/toMarkdown().",
       "dependencies": ["feat-001"],
-      "status": "not-started",
-      "evidence": ""
+      "status": "completed",
+      "evidence": "richeditor-compose:1.0.0-rc05-k2 added (version pinned for Kotlin 2.0.0/compose-bom 2024.06.00 compat, NOT latest 1.0.0 which needs Kotlin 2.4.0). EditorScreen.kt eye mode now uses editable RichTextEditor with bidirectional sync to contentField.text via setMarkdown()/toMarkdown() (trimEnd()-normalized to avoid save-loop). Added FormatToolbar (bold/italic/strikethrough/code/bulleted/numbered list) using only README-documented RichTextState API. Deleted dead MarkdownPreview.kt (read-only renderer), replaced entirely. Verified: ./gradlew :apps:android:compileDebugKotlin and full ./init.sh both green, 175/175 tests passing, no regressions."
     },
     {
       "id": "feat-003",
