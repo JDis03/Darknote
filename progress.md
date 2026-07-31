@@ -1,3 +1,9 @@
+## 2026-07-31 20:09 — DarkNote
+**Summary**: Architecture saga conclusion: the richeditor-compose WYSIWYG approach (commit 25bf35e) was correct all along. The VisualTransformation replacement was an architectural dead end — BasicTextField in Compose BOM 2024.06.00 ignores visualTransformation entirely. Spent multiple commits debugging (blue text test, mode indicator bar) before confirming the framework-level limitation, then reverted to the working richeditor-compose RichTextEditor. The markdown-reformatting trade-off is standard across all AST-based editors and was accepted by the user.
+**Verified**: After full revert to richeditor-compose: compileDebugKotlin succeeded, full ./init.sh green, no regressions. Committed as b39f3a2.
+**Completed**: none
+---
+---
 ## 2026-07-31 19:48 — DarkNote
 **Summary**: Fixed fenced code blocks being invisible in live markdown preview — root cause was Color(0x1F66BB6A) background (12% opacity, imperceptible). Changed to: dimmed fence markers (grey), visible ~15% grey code block background + monospace + normal text colour (not green), pinkish inline code colour — all matching Obsidian's visual treatment. Split regex into 3 capture groups to style fences/opening/content separately. Updated user-report test to verify background is actually visible (non-Transparent).
 **Verified**: Compile succeeded, 13/13 unit tests green (MarkdownVisualTransformationTest), full ./init.sh green. Committed as 7243860.

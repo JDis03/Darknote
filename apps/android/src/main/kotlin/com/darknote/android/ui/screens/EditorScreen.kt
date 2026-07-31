@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
@@ -420,6 +421,21 @@ fun EditorScreen(
                 // notes) or raw editor with live syntax highlighting (toggled via
                 // the eye/pencil icon, or always for non-markdown notes).
                 if (useRichEditor) {
+                    // DEBUG: show border to confirm RichTextEditor is composed.
+                    // Remove after confirming rendering works.
+                    val debugContent = remember { derivedStateOf { richTextState.annotatedString.text } }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(2.dp, Color(0xFFE53935))
+                            .padding(4.dp)
+                    ) {
+                        Text(
+                            "RICH EDITOR ACTIVE | text len=${debugContent.value.length} | contentField len=${contentField.text.length}",
+                            style = MaterialTheme.typography.labelSmall.copy(color = Color(0xFFE53935)),
+                            modifier = Modifier.align(Alignment.TopCenter)
+                        )
+                    }
                     FormatToolbar(richTextState)
                     Spacer(Modifier.height(4.dp))
                     RichTextEditor(
