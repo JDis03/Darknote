@@ -44,17 +44,23 @@ object MarkdownLiveStyle {
     private val headerColor = Color(0xFF4FA6FF)
     private val linkColor = Color(0xFFFFA726)
     private val urlColor = Color(0xFF9AA0A6)
-    private val codeColor = Color(0xFF66BB6A)
-    private val codeBackground = Color(0x1F66BB6A)
     private val quoteColor = Color(0xFF9E9E9E)
     private val listColor = Color(0xFFAB47BC)
+
+    // Code blocks: Obsidian-style — visible grey background (~15% grey), normal
+    // text colour (not green!), monospace. Fence markers (```, language tag) are
+    // dimmed separately. Inline code gets the same treatment, just inline.
+    private val codeBackground = Color(0x26707070)
+    private val fenceColor = Color(0xFF808080)
+    private val inlineCodeColor = Color(0xFFFF6B6B)
 
     private val headerSizes = mapOf(
         1 to 26.sp, 2 to 23.sp, 3 to 20.sp, 4 to 18.sp, 5 to 16.sp, 6 to 15.sp
     )
 
     private val headerRule = Regex("(?m)^(#{1,6})([ \\t]+)(.*)$")
-    private val fencedCodeRule = Regex("(?s)```[^\\n]*\\n?.*?```")
+    // Three capture groups: (opening fence + language tag) (code content) (closing fence)
+    private val fencedCodeRule = Regex("(?s)(```[^\\n]*\\n)(.*?)(```)")
     private val inlineCodeRule = Regex("`[^`\\n]+`")
     private val boldRule = Regex("(\\*\\*[^*\\n]+\\*\\*)|(__[^_\\n]+__)")
     private val italicRule = Regex("(?<!\\*)\\*(?!\\*)[^*\\n]+\\*(?!\\*)|(?<!_)_(?!_)[^_\\n]+_(?!_)")
@@ -90,19 +96,30 @@ object MarkdownLiveStyle {
             )
         }
 
-        // Fenced code blocks — dim fences implicitly via monospace/background block.
+        // Fenced code blocks — Obsidian-style: dimmed fences, visible grey
+        // background + monospace on the code content.
         for (m in fencedCodeRule.findAll(text)) {
-            mark(
-                SpanStyle(fontFamily = FontFamily.Monospace, color = codeColor, background = codeBackground),
-                m.range.first, m.range.last + 1
+            val opening = m.groups[1]   // ```python\n
+            val content = m.groups[2]   // print("Hola")\n
+            val closing = m.groups[3]   // ```
+            if (opening == null || content == null || closing == null) continue
+
+            val contentStyle = SpanStyle(
+                fontFamily = FontFamily.Monospace,
+                background = codeBackground
             )
+            val fenceStyle = SpanStyle(color = fenceColor)
+
+            mark(fenceStyle, opening.range.first, opening.range.last + 1)
+            mark(contentStyle, content.range.first, content.range.last + 1)
+            mark(fenceStyle, closing.range.first, closing.range.last + 1)
         }
 
-        // Inline code `code`
+        // Inline code `code` — dim backticks, visible background + monospace on the text.
         for (m in inlineCodeRule.findAll(text)) {
             mark(SpanStyle(color = markerColor), m.range.first, m.range.first + 1)
             mark(
-                SpanStyle(fontFamily = FontFamily.Monospace, color = codeColor, background = codeBackground),
+                SpanStyle(fontFamily = FontFamily.Monospace, color = inlineCodeColor, background = codeBackground),
                 m.range.first + 1, m.range.last
             )
             mark(SpanStyle(color = markerColor), m.range.last, m.range.last + 1)

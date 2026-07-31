@@ -1,11 +1,13 @@
 package com.darknote.android.test
 
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.OffsetMapping
 import com.darknote.android.ui.components.MarkdownLiveStyle
 import com.darknote.android.ui.components.MarkdownVisualTransformation
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * The whole point of MarkdownVisualTransformation (vs. the earlier WYSIWYG
@@ -72,6 +74,30 @@ class MarkdownVisualTransformationTest {
     @Test
     fun `fenced code block is preserved`() {
         assertTextUnchanged("```kotlin\nval x = 1\nprintln(x)\n```")
+    }
+
+    @Test
+    fun `fenced python code block from user report gets monospace and visible background`() {
+        // Exact input reported: "I pasted ```python\nprint("Hola")\n``` and saw nothing".
+        // The old implementation used a nearly-invisible 12%-opacity green background
+        // and applied the same colour to fences + code content alike — indistinguishable
+        // from surrounding text. The fix splits fences (dimmed) from code content
+        // (monospace + visible ~15% grey background), matching Obsidian's treatment.
+        val input = "```python\nprint(\"Hola\")\n```"
+        assertTextUnchanged(input)
+
+        val styled = MarkdownLiveStyle.style(input)
+
+        // Opening fence (```python\n) should be dimmed
+        val openFenceStyle = styled.spanStyles.find { it.start == 0 && it.end == 10 }
+        assertTrue(openFenceStyle != null, "Opening fence (0..10) must have a dimmed style applied")
+
+        // Code content should have monospace AND a visible background
+        val codeContentStyle = styled.spanStyles.find { it.start == 10 }
+        assertTrue(codeContentStyle != null, "Code content (starting at 10) must have monospace+background style")
+        assertEquals(FontFamily.Monospace, codeContentStyle!!.item.fontFamily)
+        assertTrue(codeContentStyle.item.background != null && codeContentStyle.item.background != androidx.compose.ui.graphics.Color.Transparent,
+            "Code content must have a visible background — the old 0x1F-almost-invisible background was the bug")
     }
 
     @Test

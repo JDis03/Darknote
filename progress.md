@@ -1,3 +1,9 @@
+## 2026-07-31 19:28 — DarkNote
+**Summary**: Reverted the richeditor-compose WYSIWYG editor entirely after user identified the AST round-trip approach unfixably reformats untouched markdown on every edit. Replaced with the real Obsidian/Joplin architecture: a single BasicTextField bound to contentField.text in both eye/pencil modes, with only the VisualTransformation (identity offset mapping, pure display decoration) differing. New MarkdownLiveStyle/MarkdownVisualTransformation.kt provides live markdown styling (dimmed markers, scaled headers, styled emphasis/lists/code/quotes/links) without ever touching the source string. Added 12 tests pinning byte-for-byte preservation, including the exact blockquote paste that surfaced the original bug.
+**Verified**: ./gradlew :apps:android:compileDebugKotlin succeeded; :apps:android:testDebugUnitTest ran MarkdownVisualTransformationTest with tests=12 failures=0 errors=0 (verified via JUnit XML, not the misleading 'N actionable tasks' Gradle line); full ./init.sh green, no regressions. Committed as 2a58d76.
+**Completed**: none
+---
+---
 ## 2026-07-31 18:50 — DarkNote
 **Summary**: Fixed two bugs the user found after testing the WYSIWYG editor commit: (1) eye/pencil view mapping was inverted — WYSIWYG is now correctly the default view with the toolbar, raw source is the toggle target; (2) a data-mutation bug where entering WYSIWYG mode silently rewrote pasted markdown via an unguarded bidirectional sync echo, fixed with a one-shot suppression flag around setMarkdown() loads.
 **Verified**: ./gradlew :apps:android:compileDebugKotlin succeeded; full ./init.sh green, 175/175 tests passing. Committed as 25bf35e.
