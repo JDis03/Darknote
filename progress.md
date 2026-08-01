@@ -1,3 +1,9 @@
+## 2026-07-31 20:46 — DarkNote
+**Summary**: Final architecture: replaced richeditor-compose with own MarkdownParser-based real markdown render. EditorScreen.kt now has two clean modes — eye (edit: BasicTextField + syntax highlighting) and pencil (preview: MarkdownPreview using shared/core MarkdownParser AST rendered as real Compose UI with headings, code blocks, blockquotes, lists, inline styles). Zero external dependencies, zero reformatting risk, no sync logic. Pushed to main at 3039a17.
+**Verified**: compileDebugKotlin green, full init.sh green, shared/core tests green, pushed to main (3039a17).
+**Completed**: none
+---
+---
 ## 2026-07-31 20:09 — DarkNote
 **Summary**: Architecture saga conclusion: the richeditor-compose WYSIWYG approach (commit 25bf35e) was correct all along. The VisualTransformation replacement was an architectural dead end — BasicTextField in Compose BOM 2024.06.00 ignores visualTransformation entirely. Spent multiple commits debugging (blue text test, mode indicator bar) before confirming the framework-level limitation, then reverted to the working richeditor-compose RichTextEditor. The markdown-reformatting trade-off is standard across all AST-based editors and was accepted by the user.
 **Verified**: After full revert to richeditor-compose: compileDebugKotlin succeeded, full ./init.sh green, no regressions. Committed as b39f3a2.

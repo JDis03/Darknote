@@ -1,21 +1,42 @@
 package com.darknote.android.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -26,14 +47,19 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.darknote.core.markdown.MarkdownParser
+import com.darknote.core.markdown.MarkdownSerializer
 import com.darknote.core.markdown.MdBlock
 import com.darknote.core.markdown.MdInline
-import com.darknote.core.markdown.MarkdownParser
 
 /**
  * Renderiza Markdown real usando el parser propio de DarkNote:
  * headings con tamaños, code blocks con fondo, blockquotes con borde,
  * listas con viñetas, imágenes como placeholders, etc.
+ *
+ * Cada bloque tiene su propio botón de copiar (Notion/Obsidian/GitHub
+ * style) que copia SOLO el markdown de ese bloque — reconstruido vía
+ * [MarkdownSerializer], nunca el texto ya renderizado.
  */
 @Composable
 fun MarkdownPreview(
@@ -46,9 +72,70 @@ fun MarkdownPreview(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        blocks.forEach { block -> BlockRenderer(block) }
+        blocks.forEach { block -> BlockWithCopy(block) }
+    }
+}
+
+/**
+ * Wraps a single block with a copy button. Code blocks always show the
+ * button (GitHub/VS Code convention); other blocks reveal it on tap and
+ * also copy directly on long-press (with haptic feedback).
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun BlockWithCopy(block: MdBlock) {
+    val clipboard = LocalClipboardManager.current
+    val haptic = LocalHapticFeedback.current
+    var showCopy by remember { mutableStateOf(false) }
+    val isCodeBlock = block is MdBlock.CodeBlock
+    val copyVisible = isCodeBlock || showCopy
+
+    fun copyBlock() {
+        clipboard.setText(AnnotatedString(MarkdownSerializer.serialize(block)))
+    }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(end = if (copyVisible) 40.dp else 0.dp)
+                .combinedClickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { showCopy = !showCopy },
+                    onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        copyBlock()
+                    }
+                )
+        ) {
+            BlockRenderer(block)
+        }
+
+        AnimatedVisibility(
+            visible = copyVisible,
+            modifier = Modifier.align(Alignment.TopEnd),
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut()
+        ) {
+            IconButton(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    copyBlock()
+                    showCopy = false
+                },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ContentCopy,
+                    contentDescription = "Copiar bloque",
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
+        }
     }
 }
 

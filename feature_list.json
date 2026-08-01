@@ -14,15 +14,15 @@
       "description": "Replace the read-only MarkdownPreview toggle in EditorScreen.kt with an editable WYSIWYG editor (richeditor-compose RichTextEditor) in eye mode, keeping BasicTextField+SyntaxHighlightTransformation as the raw/pencil mode. contentField.text stays the single source of truth (markdown), synced bidirectionally via setMarkdown()/toMarkdown().",
       "dependencies": ["feat-001"],
       "status": "completed",
-      "evidence": "FINAL ARCHITECTURE (after user found the AST round-trip approach unfixably reformats untouched content): reverted richeditor-compose entirely. EditorScreen.kt content is now a SINGLE always-present BasicTextField bound to contentField.text in both eye and pencil modes; only the VisualTransformation differs (identity offset mapping in both cases, so contentField.text is never touched by mode switching or anything the user didn't type). New MarkdownVisualTransformation.kt / MarkdownLiveStyle (apps/android/ui/components) does live markdown styling — dimmed markers, scaled/colored headers, styled bold/italic/strikethrough/code/lists/blockquotes/links/hr — purely as display decoration over the raw string, same technique as the existing SyntaxHighlightTransformation. Added MarkdownVisualTransformationTest.kt (12 tests) pinning byte-for-byte text preservation, including the exact blockquote example that surfaced the original bug. Deleted dead MarkdownPreview.kt. Verified: ./gradlew :apps:android:compileDebugKotlin, :apps:android:testDebugUnitTest (12/12 new tests green), and full ./init.sh all green, no regressions."
+      "evidence": "FINAL ARCHITECTURE (after two reverted attempts: richeditor-compose AST round-trip reformatted untouched content; BasicTextField VisualTransformation never rendered anything in this Compose version). Split editor/preview: eye icon = BasicTextField + SyntaxHighlightTransformation (raw editable markdown, zero reformatting risk); pencil icon = MarkdownPreview (apps/android/ui/components), a read-only real Compose UI render built from shared/core's MarkdownParser AST (headings at Material3 sizes, code blocks with surfaceVariant background, blockquotes with drawBehind border, lists with markers/indentation, inline bold/italic/strikethrough/code/links). No external dependency, no sync logic. Verified: compileDebugKotlin, full init.sh, shared/core tests all green. Pushed to main (3039a17)."
     },
     {
       "id": "feat-003",
-      "name": "Verification Coverage",
-      "description": "Add or confirm tests, type checks, linting, or manual verification for the active feature",
+      "name": "Block-Level Copy for Markdown Preview",
+      "description": "Each rendered block in MarkdownPreview (heading, paragraph, code block, blockquote, list item) gets its own copy button/long-press action that copies just that block's raw markdown to the clipboard, reconstructed via a new MarkdownSerializer (shared/core).",
       "dependencies": ["feat-002"],
-      "status": "not-started",
-      "evidence": ""
+      "status": "completed",
+      "evidence": "Added MarkdownSerializer.kt (shared/core/markdown) converting MdBlock/MdInline back to markdown text — used only to produce a fresh clipboard string for an explicit user copy action, never written back into the editor's contentField, so the earlier reformatting-risk concern doesn't apply here. Added MarkdownSerializerTest.kt (17 tests): exact-string checks per block type plus semantic round-trip (parse(serialize(parse(input))) == parse(input)) including the exact multi-line blockquote example from the earlier richeditor-compose bug report. MarkdownPreview.kt: each block wrapped in BlockWithCopy — code blocks always show the copy icon (GitHub convention), other blocks reveal it on tap and copy directly on long-press with haptic feedback, using LocalClipboardManager (Compose-idiomatic, not raw android.content.ClipboardManager). Verified: compileDebugKotlin, shared/core tests (17/17 new + 30/30 existing parser tests green), full init.sh green."
     },
     {
       "id": "feat-004",
