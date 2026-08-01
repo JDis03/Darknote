@@ -1,3 +1,9 @@
+## 2026-08-01 03:19 — DarkNote
+**Summary**: Implemented block-level copy for MarkdownPreview (Notion/Obsidian/GitHub style): new MarkdownSerializer.kt in shared/core reconstructs raw markdown from MdBlock/MdInline AST for clipboard use. MarkdownPreview.kt wraps each rendered block with a copy button (always visible for code blocks, tap-to-reveal + long-press-to-copy for others) using Compose's LocalClipboardManager. Added 17 new serializer tests (exact output + semantic round-trip).
+**Verified**: compileDebugKotlin succeeded; shared/core tests green (17/17 new MarkdownSerializerTest + 30/30 existing MarkdownParserTest); full ./init.sh green, no regressions. Pushed to main at d0632ab.
+**Completed**: none
+---
+---
 ## 2026-07-31 20:46 — DarkNote
 **Summary**: Final architecture: replaced richeditor-compose with own MarkdownParser-based real markdown render. EditorScreen.kt now has two clean modes — eye (edit: BasicTextField + syntax highlighting) and pencil (preview: MarkdownPreview using shared/core MarkdownParser AST rendered as real Compose UI with headings, code blocks, blockquotes, lists, inline styles). Zero external dependencies, zero reformatting risk, no sync logic. Pushed to main at 3039a17.
 **Verified**: compileDebugKotlin green, full init.sh green, shared/core tests green, pushed to main (3039a17).

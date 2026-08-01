@@ -43,6 +43,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -147,6 +148,7 @@ private fun BlockRenderer(block: MdBlock) {
         is MdBlock.CodeBlock -> CodeBlockRenderer(block)
         is MdBlock.BlockQuote -> BlockQuoteRenderer(block)
         is MdBlock.ListItem -> ListItemRenderer(block)
+        is MdBlock.Table -> TableRenderer(block)
         is MdBlock.HorizontalRule -> HorizontalDivider(
             thickness = 1.dp,
             color = MaterialTheme.colorScheme.outlineVariant,
@@ -258,6 +260,103 @@ private fun ListItemRenderer(block: MdBlock.ListItem) {
             text = buildInlineAnnotatedString(block.spans),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+/**
+ * Renders a GFM-style table. Rows with fewer cells than [MdBlock.Table.headers]
+ * are padded with empty cells — the parser reports rows exactly as written
+ * (see MarkdownParserTest), padding is purely a display-layer concern here.
+ */
+@Composable
+private fun TableRenderer(block: MdBlock.Table) {
+    val colCount = block.headers.size.coerceAtLeast(1)
+
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(vertical = 8.dp)) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                block.headers.forEachIndexed { idx, cellSpans ->
+                    val align = block.alignments.getOrElse(idx) { MdBlock.Table.ColumnAlignment.NONE }
+                    TableCell(
+                        spans = cellSpans,
+                        isHeader = true,
+                        alignment = align,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            HorizontalDivider(
+                thickness = 2.dp,
+                color = MaterialTheme.colorScheme.outline
+            )
+
+            block.rows.forEach { row ->
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    row.forEachIndexed { idx, cellSpans ->
+                        val align = block.alignments.getOrElse(idx) { MdBlock.Table.ColumnAlignment.NONE }
+                        TableCell(
+                            spans = cellSpans,
+                            isHeader = false,
+                            alignment = align,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    repeat((colCount - row.size).coerceAtLeast(0)) {
+                        TableCell(
+                            spans = emptyList(),
+                            isHeader = false,
+                            alignment = MdBlock.Table.ColumnAlignment.NONE,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                HorizontalDivider(
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TableCell(
+    spans: List<MdInline>,
+    isHeader: Boolean,
+    alignment: MdBlock.Table.ColumnAlignment,
+    modifier: Modifier = Modifier
+) {
+    val textAlign = when (alignment) {
+        MdBlock.Table.ColumnAlignment.LEFT -> TextAlign.Left
+        MdBlock.Table.ColumnAlignment.CENTER -> TextAlign.Center
+        MdBlock.Table.ColumnAlignment.RIGHT -> TextAlign.Right
+        MdBlock.Table.ColumnAlignment.NONE -> TextAlign.Start
+    }
+
+    Box(
+        modifier = modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+        contentAlignment = when (alignment) {
+            MdBlock.Table.ColumnAlignment.CENTER -> Alignment.Center
+            MdBlock.Table.ColumnAlignment.RIGHT -> Alignment.CenterEnd
+            else -> Alignment.CenterStart
+        }
+    ) {
+        Text(
+            text = buildInlineAnnotatedString(spans),
+            style = if (isHeader) {
+                MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+            } else {
+                MaterialTheme.typography.bodyMedium
+            },
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = textAlign,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }

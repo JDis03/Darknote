@@ -137,4 +137,43 @@ class MarkdownSerializerTest {
         val blocks = MarkdownParser.parse("")
         assertEquals("", MarkdownSerializer.serialize(blocks))
     }
+
+    // ── Tables ────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `table with alignments serializes with correct separator markers`() {
+        val input = """
+            | Feature | Status | Priority |
+            |:--------|:------:|---------:|
+            | Tables  | Done   | High     |
+        """.trimIndent()
+        val blocks = MarkdownParser.parse(input)
+        val serialized = MarkdownSerializer.serialize(blocks)
+        assertEquals(
+            "| Feature | Status | Priority |\n" +
+            "| :--- | :---: | ---: |\n" +
+            "| Tables | Done | High |",
+            serialized
+        )
+    }
+
+    @Test
+    fun `table round-trips semantically`() {
+        roundTripsSemantically(
+            "| Feature | Status | Priority |\n" +
+            "| :--- | :---: | ---: |\n" +
+            "| Tables | Done | High |\n" +
+            "| Images | WIP | Medium |"
+        )
+    }
+
+    @Test
+    fun `table with no data rows round-trips semantically`() {
+        roundTripsSemantically("| A | B |\n| --- | --- |")
+    }
+
+    @Test
+    fun `table with formatted cells round-trips semantically`() {
+        roundTripsSemantically("| Name | Info |\n| --- | --- |\n| **Bold** | *Italic* |")
+    }
 }

@@ -30,6 +30,21 @@ sealed interface MdBlock {
         val spans: List<MdInline>
     ) : MdBlock
     data object HorizontalRule : MdBlock
+    /**
+     * GFM-style pipe table. [headers] and each row in [rows] are lists of
+     * cell contents (each cell itself a list of [MdInline] spans, so cells
+     * can contain bold/italic/links/etc). [alignments] has one entry per
+     * header column, inferred from the separator row (`:---`, `:---:`, `---:`).
+     * Rows may have a different cell count than [headers] — the renderer
+     * pads/truncates defensively.
+     */
+    data class Table(
+        val headers: List<List<MdInline>>,
+        val alignments: List<ColumnAlignment>,
+        val rows: List<List<List<MdInline>>>
+    ) : MdBlock {
+        enum class ColumnAlignment { LEFT, CENTER, RIGHT, NONE }
+    }
 }
 
 /** Inline span kinds. Nested styles are represented by nesting [MdInline] values. */
@@ -58,6 +73,11 @@ object MarkdownParser {
     private val listItem = Regex("^(\\s*)(?:(\\d{1,9})[.)]|([*\\-+]))\\s+")
     private val taskBox = Regex("^\\[([ xX])]\\s+")
     private val linkDefinition = Regex("^\\s*\\[[^]]+]:.*$")
+    // Loose "does this line contain a pipe" check — the real determination
+    // of "is this a table" is the header+separator pair confirmed by the
+    // caller, not this regex alone.
+    private val tableLine = Regex("^\\s*\\|?.*\\|.*\\|?\\s*$")
+    private val tableSeparator = Regex("^\\s*[|\\s]*:?-+:?[|\\s:-]*\\s*$")
 
     fun parse(markdown: String): List<MdBlock> {
         val lines = markdown.replace("\r\n", "\n").replace("\r", "\n").split("\n")
@@ -111,6 +131,30 @@ object MarkdownParser {
                 flushParagraph()
                 i++
                 continue
+            }
+
+            // ── Table: | col1 | col2 | ──────────────────────────────────────
+            // A genuine table row always contains at least one '|' — none of
+            // the other line-start detectors below (#, >, digit./bullet+space,
+            // pure -/*/_ repeats for hr) ever match a line starting with '|',
+            // so trying this first is safe. The lookahead only advances `i`
+            // once a valid header + separator row pair is confirmed; a false
+            // positive (e.g. a stray '|' inside an ordinary paragraph line)
+            // falls through to the normal checks below untouched.
+            if (isTableLine(line)) {
+                val tableLines = mutableListOf<String>()
+                var j = i
+                while (j < lines.size && isTableLine(lines[j])) {
+                    tableLines += lines[j]
+                    j++
+                }
+                val separator = tableLines.getOrNull(1)
+                if (tableLines.size >= 2 && separator != null && isTableSeparator(separator)) {
+                    flushParagraph()
+                    blocks += parseTable(tableLines)
+                    i = j
+                    continue
+                }
             }
 
             // ── Setext headers: "Title\n===" / "Title\n---" ────────────────
@@ -204,6 +248,54 @@ object MarkdownParser {
     }
 
     private fun expandTabs(s: String) = s.replace("\t", "    ")
+
+    // ── Table helpers ─────────────────────────────────────────────────────
+
+    private fun isTableLine(line: String): Boolean = tableLine.matches(line)
+
+    private fun isTableSeparator(line: String): Boolean = tableSeparator.matches(line)
+
+    private fun parseTable(lines: List<String>): MdBlock.Table {
+        val headers = parseTableRow(lines[0])
+        val alignments = parseTableAlignments(lines[1], headers.size)
+        val rows = lines.drop(2).map { parseTableRow(it) }
+        return MdBlock.Table(headers = headers, alignments = alignments, rows = rows)
+    }
+
+    private fun parseTableRow(line: String): List<List<MdInline>> {
+        var trimmed = line.trim()
+        if (trimmed.startsWith("|")) trimmed = trimmed.substring(1)
+        if (trimmed.endsWith("|")) trimmed = trimmed.dropLast(1)
+        return trimmed.split("|").map { parseInline(it.trim()) }
+    }
+
+    private fun parseTableAlignments(
+        sepLine: String,
+        expectedCols: Int
+    ): List<MdBlock.Table.ColumnAlignment> {
+        var trimmed = sepLine.trim()
+        if (trimmed.startsWith("|")) trimmed = trimmed.substring(1)
+        if (trimmed.endsWith("|")) trimmed = trimmed.dropLast(1)
+        val parts = trimmed.split("|").map { it.trim() }
+
+        val alignments = parts.map { part ->
+            val left = part.startsWith(":")
+            val right = part.endsWith(":")
+            when {
+                left && right -> MdBlock.Table.ColumnAlignment.CENTER
+                right -> MdBlock.Table.ColumnAlignment.RIGHT
+                left -> MdBlock.Table.ColumnAlignment.LEFT
+                else -> MdBlock.Table.ColumnAlignment.NONE
+            }
+        }
+
+        return when {
+            alignments.size < expectedCols ->
+                alignments + List(expectedCols - alignments.size) { MdBlock.Table.ColumnAlignment.NONE }
+            alignments.size > expectedCols -> alignments.take(expectedCols)
+            else -> alignments
+        }
+    }
 
     // ── Inline phase ────────────────────────────────────────────────────────
 

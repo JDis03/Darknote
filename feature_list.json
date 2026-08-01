@@ -26,11 +26,11 @@
     },
     {
       "id": "feat-004",
-      "name": "Documentation Update",
-      "description": "Update README, architecture notes, or product docs affected by the implemented feature",
+      "name": "Markdown Table Support",
+      "description": "Add GFM-style pipe table support: MdBlock.Table in the AST (shared/core MarkdownParser), MarkdownSerializer round-trip, and a TableRenderer in Android's MarkdownPreview with column alignment and copy-block support.",
       "dependencies": ["feat-003"],
-      "status": "not-started",
-      "evidence": ""
+      "status": "completed",
+      "evidence": "MarkdownParser.kt: added MdBlock.Table(headers, alignments, rows) with nested ColumnAlignment enum (LEFT/CENTER/RIGHT/NONE). Table detection inserted right after the blank-line check in the parse loop (verified no conflict with hr/atx/blockquote/list-item detectors, which all require leading #, >, digit+./bullet+space, or pure dash/star/underscore runs that a '|'-led table row never matches). parseTable/parseTableRow/parseTableAlignments handle leading/trailing pipe stripping, column padding/truncation to header count, and inline formatting inside cells. MarkdownSerializer.kt: added Table case producing standard GFM output. MarkdownPreview.kt: TableRenderer + TableCell composables (Surface background, bold header row with divider, per-column text alignment, row padding for short rows) wired into BlockRenderer/BlockWithCopy (copy button copies the whole table's markdown). Verified: shared/core tests 40/40 (parser, +10 new) and 21/21 (serializer, +4 new) green; compileDebugKotlin green; full init.sh green; apps:desktop compiles unaffected (doesn't reference MdBlock)."
     },
     {
       "id": "feat-005",

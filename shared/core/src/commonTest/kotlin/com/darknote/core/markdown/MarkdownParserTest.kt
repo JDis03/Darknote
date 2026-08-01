@@ -274,4 +274,113 @@ class MarkdownParserTest {
         assertIs<MdBlock.Header>(blocks[0])
         assertIs<MdBlock.ListItem>(blocks[1])
     }
+
+    // ── Tables ────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `basic table with three columns and alignments`() {
+        val input = """
+            | Feature | Status | Priority |
+            |:--------|:------:|---------:|
+            | Tables  | Done   | High     |
+            | Images  | WIP    | Medium   |
+        """.trimIndent()
+        val blocks = MarkdownParser.parse(input)
+        val table = assertIs<MdBlock.Table>(blocks.single())
+
+        assertEquals(
+            listOf(listOf(MdInline.Text("Feature")), listOf(MdInline.Text("Status")), listOf(MdInline.Text("Priority"))),
+            table.headers
+        )
+        assertEquals(
+            listOf(
+                MdBlock.Table.ColumnAlignment.LEFT,
+                MdBlock.Table.ColumnAlignment.CENTER,
+                MdBlock.Table.ColumnAlignment.RIGHT
+            ),
+            table.alignments
+        )
+        assertEquals(2, table.rows.size)
+        assertEquals(listOf(MdInline.Text("Tables")), table.rows[0][0])
+        assertEquals(listOf(MdInline.Text("Done")), table.rows[0][1])
+        assertEquals(listOf(MdInline.Text("High")), table.rows[0][2])
+    }
+
+    @Test
+    fun `table without leading or trailing pipes`() {
+        val input = "Feature | Status\n--- | ---\nTables | Done"
+        val table = assertIs<MdBlock.Table>(MarkdownParser.parse(input).single())
+        assertEquals(2, table.headers.size)
+        assertEquals(1, table.rows.size)
+    }
+
+    @Test
+    fun `table with no alignment markers defaults to NONE`() {
+        val input = "| A | B |\n| --- | --- |\n| 1 | 2 |"
+        val table = assertIs<MdBlock.Table>(MarkdownParser.parse(input).single())
+        assertEquals(
+            listOf(MdBlock.Table.ColumnAlignment.NONE, MdBlock.Table.ColumnAlignment.NONE),
+            table.alignments
+        )
+    }
+
+    @Test
+    fun `table cells support inline formatting`() {
+        val input = "| Name | Info |\n| --- | --- |\n| **Bold** | *Italic* |"
+        val table = assertIs<MdBlock.Table>(MarkdownParser.parse(input).single())
+        assertEquals(listOf(MdInline.Bold(listOf(MdInline.Text("Bold")))), table.rows[0][0])
+        assertEquals(listOf(MdInline.Italic(listOf(MdInline.Text("Italic")))), table.rows[0][1])
+    }
+
+    @Test
+    fun `table with header and separator only has zero rows`() {
+        val input = "| A | B |\n| --- | --- |"
+        val table = assertIs<MdBlock.Table>(MarkdownParser.parse(input).single())
+        assertEquals(0, table.rows.size)
+    }
+
+    @Test
+    fun `single-column table`() {
+        val input = "| Only |\n| --- |\n| Data |"
+        val table = assertIs<MdBlock.Table>(MarkdownParser.parse(input).single())
+        assertEquals(1, table.headers.size)
+        assertEquals(1, table.rows.size)
+    }
+
+    @Test
+    fun `row with fewer cells than header is not padded by the parser`() {
+        // Padding to header column count is the RENDERER's responsibility
+        // (MarkdownPreview.TableRenderer), not the parser's — the parser
+        // reports exactly what each row line contained.
+        val input = "| A | B | C |\n| --- | --- | --- |\n| 1 |"
+        val table = assertIs<MdBlock.Table>(MarkdownParser.parse(input).single())
+        assertEquals(3, table.headers.size)
+        assertEquals(1, table.rows[0].size)
+    }
+
+    @Test
+    fun `a single line with a pipe but no separator row is NOT a table`() {
+        // Falls through to paragraph parsing — no false positive on stray '|'.
+        val blocks = MarkdownParser.parse("Use the flag: foo | bar\nNot a table.")
+        assertTrue(blocks.none { it is MdBlock.Table })
+        assertIs<MdBlock.Paragraph>(blocks.single())
+    }
+
+    @Test
+    fun `table followed by a paragraph is parsed as two separate blocks`() {
+        val input = "| A | B |\n| --- | --- |\n| 1 | 2 |\n\nA normal paragraph after."
+        val blocks = MarkdownParser.parse(input)
+        assertEquals(2, blocks.size)
+        assertIs<MdBlock.Table>(blocks[0])
+        assertIs<MdBlock.Paragraph>(blocks[1])
+    }
+
+    @Test
+    fun `table immediately followed by another block with no blank line`() {
+        val input = "| A | B |\n| --- | --- |\n| 1 | 2 |\n# Heading right after"
+        val blocks = MarkdownParser.parse(input)
+        assertEquals(2, blocks.size)
+        assertIs<MdBlock.Table>(blocks[0])
+        assertIs<MdBlock.Header>(blocks[1])
+    }
 }

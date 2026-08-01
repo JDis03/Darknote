@@ -52,6 +52,28 @@ private fun MdBlock.toMarkdown(): String = when (this) {
         }.joinToString("\n")
     }
     MdBlock.HorizontalRule -> "---"
+    is MdBlock.Table -> {
+        val headerLine = headers.joinToString(" | ") { it.toMarkdown() }
+        val sepLine = alignments.joinToString(" | ") { align ->
+            when (align) {
+                MdBlock.Table.ColumnAlignment.LEFT -> ":---"
+                MdBlock.Table.ColumnAlignment.CENTER -> ":---:"
+                MdBlock.Table.ColumnAlignment.RIGHT -> "---:"
+                MdBlock.Table.ColumnAlignment.NONE -> "---"
+            }
+        }
+        val rowLines = rows.joinToString("\n") { row ->
+            "| ${row.joinToString(" | ") { it.toMarkdown() }} |"
+        }
+        buildString {
+            append("| $headerLine |\n")
+            append("| $sepLine |")
+            if (rows.isNotEmpty()) {
+                append("\n")
+                append(rowLines)
+            }
+        }
+    }
 }
 
 private fun List<MdInline>.toMarkdown(): String =
