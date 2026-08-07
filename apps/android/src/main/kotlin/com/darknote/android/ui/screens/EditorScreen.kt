@@ -67,7 +67,6 @@ fun EditorScreen(
 
     val titleFocusRequester   = remember { FocusRequester() }
     val contentFocusRequester = remember { FocusRequester() }
-    val scrollState = rememberScrollState()
 
     // ── Initial load ──────────────────────────────────────────────────────
     LaunchedEffect(snippetId) {
@@ -250,13 +249,12 @@ fun EditorScreen(
         }
     ) { padding ->
         Surface(
-            modifier = Modifier.fillMaxSize().padding(padding),
+            modifier = Modifier.fillMaxSize().padding(padding).imePadding(),
             color = MaterialTheme.colorScheme.surface
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(scrollState)
                     .padding(horizontal = 20.dp, vertical = 12.dp)
             ) {
                 // Tags
@@ -322,32 +320,41 @@ fun EditorScreen(
                 Spacer(Modifier.height(12.dp))
 
                 // Content: preview (read-only rendered markdown) or editor (raw text).
-                if (showPreview && isMarkdown) {
-                    MarkdownPreview(
-                        markdown = contentField.text,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                } else {
-                    val highlightTransformation = remember(snippet.language) {
-                        SyntaxHighlightTransformation(snippet.language)
+                // The Box uses weight(1f) so the content area fills the remaining
+                // viewport height. BasicTextField then has bounded height and scrolls
+                // internally to keep the cursor above the keyboard.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
+                    if (showPreview && isMarkdown) {
+                        MarkdownPreview(
+                            markdown = contentField.text,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                        )
+                    } else {
+                        val highlightTransformation = remember(snippet.language) {
+                            SyntaxHighlightTransformation(snippet.language)
+                        }
+                        BasicTextField(
+                            value = contentField,
+                            onValueChange = { contentField = it },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .focusRequester(contentFocusRequester),
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 22.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            visualTransformation = highlightTransformation
+                        )
                     }
-                    BasicTextField(
-                        value = contentField,
-                        onValueChange = { contentField = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(contentFocusRequester),
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            fontFamily = FontFamily.Monospace,
-                            lineHeight = 22.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        visualTransformation = highlightTransformation
-                    )
                 }
-
-                Spacer(Modifier.height(80.dp))
             }
         }
     }

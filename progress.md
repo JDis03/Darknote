@@ -1,3 +1,9 @@
+## 2026-08-01 03:46 — DarkNote
+**Summary**: Added GFM-style Markdown table support: MdBlock.Table in shared/core MarkdownParser (with ColumnAlignment enum, table detection safely ordered in the parse loop), MarkdownSerializer Table case for the existing block-copy feature, and TableRenderer/TableCell composables in Android's MarkdownPreview (bold header row, per-column alignment, row padding, copy-button integration). Fixed unescaped regex literals and an internal-symbol Modifier.weight() import mistake from the user's proposed code during implementation.
+**Verified**: shared/core tests: 40/40 MarkdownParserTest (10 new), 21/21 MarkdownSerializerTest (4 new); compileDebugKotlin green; apps:desktop:compileKotlin unaffected; full ./init.sh green. Pushed to main at 224c1bf.
+**Completed**: none
+---
+---
 ## 2026-08-01 03:19 — DarkNote
 **Summary**: Implemented block-level copy for MarkdownPreview (Notion/Obsidian/GitHub style): new MarkdownSerializer.kt in shared/core reconstructs raw markdown from MdBlock/MdInline AST for clipboard use. MarkdownPreview.kt wraps each rendered block with a copy button (always visible for code blocks, tap-to-reveal + long-press-to-copy for others) using Compose's LocalClipboardManager. Added 17 new serializer tests (exact output + semantic round-trip).
 **Verified**: compileDebugKotlin succeeded; shared/core tests green (17/17 new MarkdownSerializerTest + 30/30 existing MarkdownParserTest); full ./init.sh green, no regressions. Pushed to main at d0632ab.

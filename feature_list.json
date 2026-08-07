@@ -33,10 +33,18 @@
       "evidence": "MarkdownParser.kt: added MdBlock.Table(headers, alignments, rows) with nested ColumnAlignment enum (LEFT/CENTER/RIGHT/NONE). Table detection inserted right after the blank-line check in the parse loop (verified no conflict with hr/atx/blockquote/list-item detectors, which all require leading #, >, digit+./bullet+space, or pure dash/star/underscore runs that a '|'-led table row never matches). parseTable/parseTableRow/parseTableAlignments handle leading/trailing pipe stripping, column padding/truncation to header count, and inline formatting inside cells. MarkdownSerializer.kt: added Table case producing standard GFM output. MarkdownPreview.kt: TableRenderer + TableCell composables (Surface background, bold header row with divider, per-column text alignment, row padding for short rows) wired into BlockRenderer/BlockWithCopy (copy button copies the whole table's markdown). Verified: shared/core tests 40/40 (parser, +10 new) and 21/21 (serializer, +4 new) green; compileDebugKotlin green; full init.sh green; apps:desktop compiles unaffected (doesn't reference MdBlock)."
     },
     {
+      "id": "feat-006",
+      "name": "Android Editor Keyboard-Aware Layout",
+      "description": "Prevent the soft keyboard from covering the text being typed in the Android editor. Switch MainActivity windowSoftInputMode from adjustPan to adjustResize, apply imePadding() to the Scaffold content, and restructure EditorScreen so the content BasicTextField/MarkdownPreview occupies the remaining viewport height (weight(1f)) and the BasicTextField scrolls internally to keep the cursor visible.",
+      "dependencies": ["feat-004"],
+      "status": "completed",
+      "evidence": "AndroidManifest.xml: changed MainActivity windowSoftInputMode from adjustPan to adjustResize. adjustPan only pans the whole window, so Compose never receives IME insets and imePadding() cannot protect the cursor. adjustResize makes WindowInsets.ime report the keyboard height. EditorScreen.kt: removed the outer Column.verticalScroll(scrollState) and the now-unused scrollState. Added Modifier.imePadding() to the Surface that receives Scaffold padding, so the content area shrinks above the keyboard. Wrapped the content region in a Box(Modifier.fillMaxWidth().weight(1f)): MarkdownPreview now uses fillMaxSize() + verticalScroll(rememberScrollState()), and the edit BasicTextField uses fillMaxSize() instead of fillMaxWidth(). A bounded-height BasicTextField scrolls internally and automatically keeps the cursor above the keyboard, matching Obsidian/Joplin-style editors. Verified: compileDebugKotlin green; full init.sh green (all tests pass)."
+    },
+    {
       "id": "feat-005",
       "name": "Cleanup and Handoff",
       "description": "Record verification evidence, update progress.md, and leave a clear next-session path",
-      "dependencies": ["feat-004"],
+      "dependencies": ["feat-006"],
       "status": "not-started",
       "evidence": ""
     }
