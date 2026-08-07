@@ -1,5 +1,6 @@
 package com.darknote.android.test
 
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
@@ -8,6 +9,15 @@ import com.darknote.android.ui.components.SyntaxHighlighter
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+
+private val KEYWORD_COLOR = Color(0xFF42A5F5)
+private val COMMENT_COLOR = Color(0xFF6D6D6D)
+private val STRING_COLOR = Color(0xFF66BB6A)
+private val NUMBER_COLOR = Color(0xFFFFA726)
+
+/** Effective color at [index]: later-added styles win on overlap, mirroring rendering. */
+private fun AnnotatedString.effectiveColorAt(index: Int): Color? =
+    spanStyles.filter { index >= it.start && index < it.end }.lastOrNull()?.item?.color
 
 /**
  * Covers two things the manual audit flagged as risk areas:
@@ -109,5 +119,108 @@ class SyntaxHighlighterTest {
         val pasteEndOffset = (original + pasted).length
         assertEquals(pasteEndOffset, transformed.offsetMapping.originalToTransformed(pasteEndOffset))
         assertEquals(pasteEndOffset, transformed.offsetMapping.transformedToOriginal(pasteEndOffset))
+    }
+
+    // ── Rule priority (comment/string beats keyword/number) ───────────────
+
+    @Test
+    fun `keyword inside line comment keeps comment style`() {
+        val input = "// return the value"
+        val result = SyntaxHighlighter.highlight(input, "kotlin")
+        val idx = input.indexOf("return")
+        assertEquals(COMMENT_COLOR, result.effectiveColorAt(idx),
+            "keywords inside comments must not be re-colored as keywords")
+    }
+
+    @Test
+    fun `keyword inside string keeps string style`() {
+        val input = "x = \"def f():\""
+        val result = SyntaxHighlighter.highlight(input, "python")
+        val idx = input.indexOf("def")
+        assertEquals(STRING_COLOR, result.effectiveColorAt(idx))
+    }
+
+    @Test
+    fun `url inside string is not treated as comment start`() {
+        val input = "val url = \"https://example.com\""
+        val result = SyntaxHighlighter.highlight(input, "kotlin")
+        val idx = input.indexOf("example.com")
+        assertEquals(STRING_COLOR, result.effectiveColorAt(idx),
+            "'//' inside a string literal must not start a comment span")
+    }
+
+    @Test
+    fun `number inside comment keeps comment style`() {
+        val input = "# retry 5 times"
+        val result = SyntaxHighlighter.highlight(input, "bash")
+        val idx = input.indexOf("5")
+        assertEquals(COMMENT_COLOR, result.effectiveColorAt(idx))
+    }
+
+    // ── New grammar coverage ───────────────────────────────────────────────
+
+    @Test
+    fun `block comment is styled as comment`() {
+        val input = "/* note */ val x = 1"
+        val result = SyntaxHighlighter.highlight(input, "kotlin")
+        val idx = input.indexOf("note")
+        assertEquals(COMMENT_COLOR, result.effectiveColorAt(idx))
+        assertEquals(input, result.text)
+    }
+
+    @Test
+    fun `sql keywords highlight case insensitively`() {
+        val input = "select name from users"
+        val result = SyntaxHighlighter.highlight(input, "sql")
+        assertEquals(KEYWORD_COLOR, result.effectiveColorAt(input.indexOf("select")))
+        assertEquals(KEYWORD_COLOR, result.effectiveColorAt(input.indexOf("from")))
+    }
+
+    @Test
+    fun `config keys beyond the first line are highlighted`() {
+        // Regression: line-anchored rules lacked (?m), so only line 1 matched.
+        val input = "host = a\nport = 2"
+        val result = SyntaxHighlighter.highlight(input, "config")
+        val idx = input.indexOf("port")
+        assertEquals(Color(0xFFAB47BC), result.effectiveColorAt(idx))
+    }
+
+    @Test
+    fun `yaml keys beyond the first line are highlighted`() {
+        val input = "name: x\nnested:\n  key: y"
+        val result = SyntaxHighlighter.highlight(input, "yaml")
+        assertEquals(Color(0xFFAB47BC), result.effectiveColorAt(input.indexOf("nested")))
+        assertEquals(Color(0xFFAB47BC), result.effectiveColorAt(input.indexOf("key")))
+    }
+
+    @Test
+    fun `hex numbers are styled as numbers`() {
+        val input = "val mask = 0xFF00"
+        val result = SyntaxHighlighter.highlight(input, "kotlin")
+        assertEquals(NUMBER_COLOR, result.effectiveColorAt(input.indexOf("0xFF00")))
+    }
+
+    @Test
+    fun `kotlin raw triple quoted string is styled as string`() {
+        val input = "val s = \"\"\"raw \"quoted\" text\"\"\""
+        val result = SyntaxHighlighter.highlight(input, "kotlin")
+        assertEquals(STRING_COLOR, result.effectiveColorAt(input.indexOf("quoted")))
+        assertEquals(input, result.text)
+    }
+
+    @Test
+    fun `js template literal spans multiple lines`() {
+        val input = "const s = `line1\nline2`"
+        val result = SyntaxHighlighter.highlight(input, "javascript")
+        assertEquals(STRING_COLOR, result.effectiveColorAt(input.indexOf("line2")))
+        assertEquals(input, result.text)
+    }
+
+    @Test
+    fun `json keys override string style`() {
+        val input = "{\"name\": \"dark\"}"
+        val result = SyntaxHighlighter.highlight(input, "json")
+        assertEquals(Color(0xFFAB47BC), result.effectiveColorAt(input.indexOf("name")))
+        assertEquals(STRING_COLOR, result.effectiveColorAt(input.indexOf("dark")))
     }
 }

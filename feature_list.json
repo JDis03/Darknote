@@ -49,10 +49,18 @@
       "evidence": "Root cause confirmed by code inspection: EditorScreen's initial-load LaunchedEffect was keyed only on snippetId. After process death, rememberSaveable restores hasInitialized=true but the Hilt ViewModel restarts, so filteredSnippets is empty until the DB query emits; snippet==null makes the composable early-return to the loading spinner, leaving titleFocusRequester unattached when requestFocus() fires -> IllegalStateException (FocusRequester is not initialized). Rotation never crashed because the ViewModel survives it. Fix: gate the effect with a boolean snippetLoaded key (LaunchedEffect(snippetId, snippetLoaded)) and return early while the snippet is null; the effect relaunches exactly once when the list loads, after the composition that includes the text fields. Boolean key chosen over the snippet object so auto-save's updated snippet objects (new modifiedAt each save) don't restart the effect and steal focus. Side benefit: also fixes the latent cold-start bug where the old single-key effect returned early forever if snippets hadn't emitted yet, leaving the editor blank. Verified: compileDebugKotlin green; full init.sh green (all tests pass)."
     },
     {
+      "id": "feat-008",
+      "name": "Code Syntax Highlighting Improvements",
+      "description": "Fix inverted rule priority (keywords/numbers were highlighted inside comments and strings), missing (?m) multiline anchors (config/yaml/bash rules only matched line 1), case-sensitive SQL keywords, broken Kotlin triple-quoted raw strings, missing block comments, single-line-only JS template literals, weak number regex, and regexes being recompiled on every keystroke.",
+      "dependencies": ["feat-007"],
+      "status": "completed",
+      "evidence": "Rewrote SyntaxHighlighter.kt rule pipeline with explicit priority order (later styles win on AnnotatedString overlap): keywords -> numbers -> block comments -> line comments -> strings -> extraRules. This fixes keyword/number highlighting inside comments and strings while keeping URLs like 'https://...' inside strings from being misread as '//' comment starts (strings rank above comments), and keeps extraRules (JSON keys, markdown fences, bash $vars, cpp #include) highest. LanguageGrammar gained blockCommentPairs, rawStringDelimiters (Kotlin/Python triple quotes now work), keywordIgnoreCase (SQL), and skips empty keyword sets. Added (?m) to config/yaml/bash line-anchored rules, multiline backtick template literals for JS/TS, stronger number regex (0xFF, 0b101, 1_000, 1e10, 1f/2L). Compiled rule lists are now cached per language in a ConcurrentHashMap — previously buildRules() recompiled ~10 Regex objects on every editor keystroke. Tests: SyntaxHighlighterTest extended 7 -> 19 cases asserting effective colors at offsets (comment/string priority, SQL case, multiline config/yaml keys, hex numbers, raw strings, multiline templates, JSON keys) plus text-preservation guarantees; 19/19 green. Full init.sh green."
+    },
+    {
       "id": "feat-005",
       "name": "Cleanup and Handoff",
       "description": "Record verification evidence, update progress.md, and leave a clear next-session path",
-      "dependencies": ["feat-007"],
+      "dependencies": ["feat-008"],
       "status": "not-started",
       "evidence": ""
     }

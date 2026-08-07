@@ -1,3 +1,9 @@
+## 2026-08-07 04:59 — DarkNote
+**Summary**: Diagnosed and fixed the crash when returning to the editor after the app sat in background: process death restores hasInitialized=true via rememberSaveable but restarts the ViewModel, so snippets is empty, snippet==null shows the loading spinner, and the initial-load LaunchedEffect still called titleFocusRequester.requestFocus() on an unattached FocusRequester (IllegalStateException). Gated the effect on a snippetLoaded boolean so focus is only requested after the text fields are composed.
+**Verified**: compileDebugKotlin green; full ./init.sh green (all tests pass). Pushed to main at ec5dee1. Root cause verified by code inspection of the process-death composition/effect ordering (no emulator available for runtime repro).
+**Completed**: none
+---
+---
 ## 2026-08-07 02:26 — DarkNote
 **Summary**: Ran clean build verification after the keyboard-aware editor fix. Executed ./gradlew clean followed by ./init.sh; all 175 tasks rebuilt from scratch and all tests passed with no regressions.
 **Verified**: ./gradlew clean green; ./init.sh green (175 tasks executed, all tests pass).

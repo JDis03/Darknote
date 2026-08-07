@@ -6,6 +6,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import java.util.concurrent.ConcurrentHashMap
 
 data class TokenRule(
     val pattern: Regex,
@@ -16,8 +17,28 @@ data class LanguageGrammar(
     val keywords: Set<String>,
     val singleLineComment: String? = null,
     val stringDelimiters: List<String> = listOf("\"", "'"),
+    val blockCommentPairs: List<Pair<String, String>> = emptyList(),
+    /** Multi-line string delimiters, e.g. Kotlin/Python triple quotes. */
+    val rawStringDelimiters: List<String> = emptyList(),
+    /** SQL and friends: keywords match regardless of letter case. */
+    val keywordIgnoreCase: Boolean = false,
     val extraRules: List<TokenRule> = emptyList()
 ) {
+    /**
+     * Builds the rules in priority order: in an AnnotatedString, styles added
+     * LATER win on overlapping ranges, so the list runs from lowest to highest
+     * priority:
+     *
+     *   keywords -> numbers -> block comments -> line comments -> strings -> extraRules
+     *
+     * Consequences of this order:
+     * - Keywords/numbers inside comments or strings are NOT re-colored (the
+     *   comment/string style overrides them).
+     * - Strings rank above comments so URLs such as "https://…" inside a string
+     *   are not mistaken for a "//" line-comment start.
+     * - extraRules rank highest so language-specific constructs (JSON keys,
+     *   markdown code fences, bash $vars, cpp #include) always win.
+     */
     fun buildRules(
         keywordStyle: SpanStyle,
         commentStyle: SpanStyle,
@@ -26,18 +47,64 @@ data class LanguageGrammar(
     ): List<TokenRule> {
         val rules = mutableListOf<TokenRule>()
 
-        singleLineComment?.let { prefix ->
-            rules.add(TokenRule(Regex("$prefix.*"), commentStyle))
+        // 1. Keywords (lowest priority). Skipped entirely for grammars without
+        //    keywords (markdown) — an empty alternation would produce useless
+        //    zero-width matches on every word boundary.
+        if (keywords.isNotEmpty()) {
+            val options = if (keywordIgnoreCase) setOf(RegexOption.IGNORE_CASE) else emptySet()
+            rules.add(
+                TokenRule(
+                    Regex("\\b(?:${keywords.joinToString("|") { Regex.escape(it) }})\\b", options),
+                    keywordStyle
+                )
+            )
         }
 
+        // 2. Numbers: hex (0xFF), binary (0b101), digit separators (1_000),
+        //    decimals, exponents (1e10) and type suffixes (1f, 2L).
+        rules.add(
+            TokenRule(
+                Regex("\\b(?:0[xX][0-9a-fA-F_]+|0[bB][01_]+|\\d[\\d_]*(?:\\.\\d+)?(?:[eE][+-]?\\d+)?[fFLl]?)\\b"),
+                numberStyle
+            )
+        )
+
+        // 3. Block comments /* ... */
+        blockCommentPairs.forEach { (start, end) ->
+            rules.add(
+                TokenRule(
+                    Regex("${Regex.escape(start)}[\\s\\S]*?${Regex.escape(end)}"),
+                    commentStyle
+                )
+            )
+        }
+
+        // 4. Line comments
+        singleLineComment?.let { prefix ->
+            rules.add(TokenRule(Regex("${Regex.escape(prefix)}[^\\n]*"), commentStyle))
+        }
+
+        // 5. Strings. Backticks (JS/TS template literals) and multi-char
+        //    delimiters may span lines; plain quotes stay single-line and
+        //    honor backslash escapes.
         stringDelimiters.forEach { delim ->
             val escaped = Regex.escape(delim)
-            rules.add(TokenRule(Regex("$escaped(?:[^$escaped\\\\]|\\\\.)*$escaped"), stringStyle))
+            val pattern = if (delim == "`" || delim.length > 1) {
+                Regex("$escaped[\\s\\S]*?$escaped")
+            } else {
+                Regex("$escaped(?:[^$escaped\\\\\\n]|\\\\.)*$escaped")
+            }
+            rules.add(TokenRule(pattern, stringStyle))
         }
 
-        rules.add(TokenRule(Regex("\\b(?:${keywords.joinToString("|") { Regex.escape(it) }})\\b"), keywordStyle))
-        rules.add(TokenRule(Regex("\\b\\d+(\\.\\d+)?\\b"), numberStyle))
+        // Raw strings (""" ... """) rank right after normal strings so any
+        // accidental quote matches inside them are overridden.
+        rawStringDelimiters.forEach { delim ->
+            val escaped = Regex.escape(delim)
+            rules.add(TokenRule(Regex("$escaped[\\s\\S]*?$escaped"), stringStyle))
+        }
 
+        // 6. Language-specific extra rules (highest priority)
         rules.addAll(extraRules)
 
         return rules
@@ -55,7 +122,8 @@ val languageGrammars = mapOf(
             "by", "throw", "try", "catch", "finally", "typealias", "enum"
         ),
         singleLineComment = "//",
-        stringDelimiters = listOf("\"", "\"\"\""),
+        blockCommentPairs = listOf("/*" to "*/"),
+        rawStringDelimiters = listOf("\"\"\""),
         extraRules = listOf(
             TokenRule(Regex("@\\w+"), SpanStyle(fontWeight = FontWeight.Bold, color = Color(0xFFFFA726)))
         )
@@ -69,6 +137,7 @@ val languageGrammars = mapOf(
             "global", "nonlocal", "assert", "del"
         ),
         singleLineComment = "#",
+        rawStringDelimiters = listOf("\"\"\"", "'''"),
         extraRules = listOf(
             TokenRule(Regex("@\\w+"), SpanStyle(fontWeight = FontWeight.Bold, color = Color(0xFFFFA726)))
         )
@@ -83,7 +152,7 @@ val languageGrammars = mapOf(
         singleLineComment = "#",
         extraRules = listOf(
             TokenRule(Regex("\\$[{]?\\w+[}]?"), SpanStyle(fontWeight = FontWeight.Bold, color = Color(0xFF66BB6A))),
-            TokenRule(Regex("^\\s*\\w+\\s*\\(\\)"), SpanStyle(fontWeight = FontWeight.Bold, color = Color(0xFF42A5F5)))
+            TokenRule(Regex("(?m)^\\s*\\w+\\s*\\(\\)"), SpanStyle(fontWeight = FontWeight.Bold, color = Color(0xFF42A5F5)))
         )
     ),
     "javascript" to LanguageGrammar(
@@ -95,6 +164,7 @@ val languageGrammars = mapOf(
             "null", "undefined", "of", "in", "from"
         ),
         singleLineComment = "//",
+        blockCommentPairs = listOf("/*" to "*/"),
         stringDelimiters = listOf("\"", "'", "`")
     ),
     "typescript" to LanguageGrammar(
@@ -109,6 +179,7 @@ val languageGrammars = mapOf(
             "string", "number", "boolean", "void"
         ),
         singleLineComment = "//",
+        blockCommentPairs = listOf("/*" to "*/"),
         stringDelimiters = listOf("\"", "'", "`"),
         extraRules = listOf(
             TokenRule(Regex("@\\w+"), SpanStyle(fontWeight = FontWeight.Bold, color = Color(0xFFFFA726)))
@@ -125,21 +196,22 @@ val languageGrammars = mapOf(
             "DEFAULT", "UNIQUE", "CHECK", "CONSTRAINT", "INTEGER", "VARCHAR",
             "TEXT", "BOOLEAN", "TIMESTAMP", "BEGIN", "COMMIT", "ROLLBACK"
         ),
-        singleLineComment = "--"
+        singleLineComment = "--",
+        keywordIgnoreCase = true
     ),
     "config" to LanguageGrammar(
         keywords = setOf("true", "false", "yes", "no", "on", "off"),
         singleLineComment = "#",
         extraRules = listOf(
-            TokenRule(Regex("^\\s*\\[\\w+\\]"), SpanStyle(fontWeight = FontWeight.Bold, color = Color(0xFF42A5F5))),
-            TokenRule(Regex("^\\s*\\w+\\s*[=:]"), SpanStyle(color = Color(0xFFAB47BC)))
+            TokenRule(Regex("(?m)^\\s*\\[[^\\]]+\\]"), SpanStyle(fontWeight = FontWeight.Bold, color = Color(0xFF42A5F5))),
+            TokenRule(Regex("(?m)^\\s*[\\w.-]+\\s*[=:]"), SpanStyle(color = Color(0xFFAB47BC)))
         )
     ),
     "yaml" to LanguageGrammar(
         keywords = setOf("true", "false", "yes", "no", "on", "off", "null"),
         singleLineComment = "#",
         extraRules = listOf(
-            TokenRule(Regex("^\\s*[\\w-]+\\s*:"), SpanStyle(color = Color(0xFFAB47BC)))
+            TokenRule(Regex("(?m)^\\s*[\\w.-]+\\s*:"), SpanStyle(color = Color(0xFFAB47BC)))
         )
     ),
     "json" to LanguageGrammar(
@@ -181,6 +253,7 @@ val languageGrammars = mapOf(
             "while", "include", "define"
         ),
         singleLineComment = "//",
+        blockCommentPairs = listOf("/*" to "*/"),
         extraRules = listOf(
             TokenRule(Regex("#\\s*include\\s*[<\"]\\S+[>\"]"), SpanStyle(fontWeight = FontWeight.Bold, color = Color(0xFFEF5350)))
         )
@@ -194,16 +267,26 @@ object SyntaxHighlighter {
     private val stringStyle = SpanStyle(color = Color(0xFF66BB6A))
     private val numberStyle = SpanStyle(color = Color(0xFFFFA726))
 
+    /**
+     * Compiled rule lists per normalized language name. Building a Regex is
+     * expensive and highlight() runs on every editor keystroke, so each
+     * grammar's rules are compiled once and reused for the app's lifetime.
+     */
+    private val rulesCache = ConcurrentHashMap<String, List<TokenRule>>()
+
     fun highlight(code: String, language: String?): androidx.compose.ui.text.AnnotatedString {
         if (language == null || code.isBlank()) {
             return buildAnnotatedString { append(code) }
         }
 
-        val grammar = languageGrammars[language.lowercase()]
-            ?: languageGrammars[normalizeLanguage(language)]
+        val key = language.lowercase()
+        val normalized = if (languageGrammars.containsKey(key)) key else normalizeLanguage(key)
+        val grammar = languageGrammars[normalized]
             ?: return buildAnnotatedString { append(code) }
 
-        val rules = grammar.buildRules(keywordStyle, commentStyle, stringStyle, numberStyle)
+        val rules = rulesCache.getOrPut(normalized) {
+            grammar.buildRules(keywordStyle, commentStyle, stringStyle, numberStyle)
+        }
 
         return buildAnnotatedString {
             append(code)
