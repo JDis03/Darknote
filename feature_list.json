@@ -41,10 +41,18 @@
       "evidence": "AndroidManifest.xml: changed MainActivity windowSoftInputMode from adjustPan to adjustResize. adjustPan only pans the whole window, so Compose never receives IME insets and imePadding() cannot protect the cursor. adjustResize makes WindowInsets.ime report the keyboard height. EditorScreen.kt: removed the outer Column.verticalScroll(scrollState) and the now-unused scrollState. Added Modifier.imePadding() to the Surface that receives Scaffold padding, so the content area shrinks above the keyboard. Wrapped the content region in a Box(Modifier.fillMaxWidth().weight(1f)): MarkdownPreview now uses fillMaxSize() + verticalScroll(rememberScrollState()), and the edit BasicTextField uses fillMaxSize() instead of fillMaxWidth(). A bounded-height BasicTextField scrolls internally and automatically keeps the cursor above the keyboard, matching Obsidian/Joplin-style editors. Verified: compileDebugKotlin green; full init.sh green (all tests pass)."
     },
     {
+      "id": "feat-007",
+      "name": "Fix EditorScreen Process-Death Crash",
+      "description": "App crashes when returning from background after Android kills the process: LaunchedEffect(snippetId) calls titleFocusRequester.requestFocus() with hasInitialized restored=true while snippet==null (ViewModel restarted, snippets still loading), so the composable early-returns with the loading spinner and the FocusRequester is not attached to any node -> IllegalStateException: FocusRequester is not initialized. Gate the effect on snippet-loaded state.",
+      "dependencies": ["feat-006"],
+      "status": "completed",
+      "evidence": "Root cause confirmed by code inspection: EditorScreen's initial-load LaunchedEffect was keyed only on snippetId. After process death, rememberSaveable restores hasInitialized=true but the Hilt ViewModel restarts, so filteredSnippets is empty until the DB query emits; snippet==null makes the composable early-return to the loading spinner, leaving titleFocusRequester unattached when requestFocus() fires -> IllegalStateException (FocusRequester is not initialized). Rotation never crashed because the ViewModel survives it. Fix: gate the effect with a boolean snippetLoaded key (LaunchedEffect(snippetId, snippetLoaded)) and return early while the snippet is null; the effect relaunches exactly once when the list loads, after the composition that includes the text fields. Boolean key chosen over the snippet object so auto-save's updated snippet objects (new modifiedAt each save) don't restart the effect and steal focus. Side benefit: also fixes the latent cold-start bug where the old single-key effect returned early forever if snippets hadn't emitted yet, leaving the editor blank. Verified: compileDebugKotlin green; full init.sh green (all tests pass)."
+    },
+    {
       "id": "feat-005",
       "name": "Cleanup and Handoff",
       "description": "Record verification evidence, update progress.md, and leave a clear next-session path",
-      "dependencies": ["feat-006"],
+      "dependencies": ["feat-007"],
       "status": "not-started",
       "evidence": ""
     }

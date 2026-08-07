@@ -69,7 +69,16 @@ fun EditorScreen(
     val contentFocusRequester = remember { FocusRequester() }
 
     // ── Initial load ──────────────────────────────────────────────────────
-    LaunchedEffect(snippetId) {
+    // Keyed on snippetLoaded (boolean, not the snippet object) so the focus
+    // request only runs once the title field is actually composed. After a
+    // process death the ViewModel restarts and `snippets` is briefly empty;
+    // without this gate, requestFocus() fires while the composable is showing
+    // the loading state and the FocusRequester is attached to nothing, which
+    // crashes with "FocusRequester is not initialized".
+    val snippetLoaded = snippet != null
+    LaunchedEffect(snippetId, snippetLoaded) {
+        if (!snippetLoaded) return@LaunchedEffect
+
         if (hasInitialized) {
             titleFocusRequester.requestFocus()
             return@LaunchedEffect

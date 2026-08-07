@@ -1,3 +1,15 @@
+## 2026-08-07 02:26 — DarkNote
+**Summary**: Ran clean build verification after the keyboard-aware editor fix. Executed ./gradlew clean followed by ./init.sh; all 175 tasks rebuilt from scratch and all tests passed with no regressions.
+**Verified**: ./gradlew clean green; ./init.sh green (175 tasks executed, all tests pass).
+**Completed**: none
+---
+---
+## 2026-08-07 02:24 — DarkNote
+**Summary**: Fixed Android editor keyboard covering typed text. Inspected the Obsidian reference APK's manifest and confirmed its MainActivity uses windowSoftInputMode=adjustResize (0x00000010). Switched DarkNote's MainActivity to adjustResize, applied imePadding() to the Scaffold content Surface, and restructured EditorScreen so the content region fills remaining viewport height via Box(weight(1f)); MarkdownPreview is independently scrollable and the edit BasicTextField uses bounded fillMaxSize(), giving it internal cursor-following scroll.
+**Verified**: Inspected obsidian/base.apk manifest: md.obsidian.MainActivity uses windowSoftInputMode=0x00000010 (adjustResize). compileDebugKotlin green; full ./init.sh green with all tests passing. Pushed to main at 171eeef.
+**Completed**: none
+---
+---
 ## 2026-08-01 03:46 — DarkNote
 **Summary**: Added GFM-style Markdown table support: MdBlock.Table in shared/core MarkdownParser (with ColumnAlignment enum, table detection safely ordered in the parse loop), MarkdownSerializer Table case for the existing block-copy feature, and TableRenderer/TableCell composables in Android's MarkdownPreview (bold header row, per-column alignment, row padding, copy-button integration). Fixed unescaped regex literals and an internal-symbol Modifier.weight() import mistake from the user's proposed code during implementation.
 **Verified**: shared/core tests: 40/40 MarkdownParserTest (10 new), 21/21 MarkdownSerializerTest (4 new); compileDebugKotlin green; apps:desktop:compileKotlin unaffected; full ./init.sh green. Pushed to main at 224c1bf.
